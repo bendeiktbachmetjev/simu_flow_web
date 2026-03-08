@@ -68,16 +68,22 @@ function App() {
       // 4. Fetch User Breakdown (Approximation from recent center sessions)
       const { data: recentSessions, error: breakdownErr } = await supabase
         .from('center_sessions')
-        .select('role')
+        .select('user_id')
         .gte('entry_time', startOfMonth)
       if (breakdownErr) throw breakdownErr
       
+      const userIds = [...new Set(recentSessions?.map(s => s.user_id) || [])]
+      
       let studentCount = 0
       let teacherCount = 0
-      recentSessions?.forEach(s => {
-        if (s.role === 'student') studentCount++
-        else if (s.role === 'teacher') teacherCount++
-      })
+      
+      if (userIds.length > 0) {
+        const { data: stdData } = await supabase.from('students').select('id').in('id', userIds)
+        const { data: tchrData } = await supabase.from('teachers').select('id').in('id', userIds)
+        
+        studentCount = stdData?.length || 0
+        teacherCount = tchrData?.length || 0
+      }
 
       // 5. Fetch Simulator Usage (Mock aggregation or real from completed sessions)
       // For a real dashboard, you'd aggregate session duration per simulator_id
