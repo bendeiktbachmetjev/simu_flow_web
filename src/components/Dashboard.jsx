@@ -10,7 +10,7 @@ import StatCard from './StatCard';
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-export default function Dashboard() {
+export default function Dashboard({ session }) {
   const [stats, setStats] = useState({
     activeSimulators: 0,
     totalSimulators: 0,
@@ -25,7 +25,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [session]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -139,6 +143,13 @@ export default function Dashboard() {
             <div className="text-sm text-slate-500 font-semibold hidden sm:block">
               {moment().format('MMMM Do YYYY, h:mm a')}
             </div>
+            <button 
+              onClick={handleLogout}
+              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Logout"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
           </div>
         </div>
       </header>
