@@ -96,18 +96,21 @@ export default function Dashboard() {
         teacherCount = tchrData?.length || 0;
       }
 
-      // Simulator Usage List
+      // Simulator Usage List (aggregate total hours per simulator for the current month)
       const { data: allSessions, error: usageErr } = await supabase
         .from('simulator_sessions')
-        .select('simulator_id')
-        .not('end_time', 'is', null)
-        .order('start_time', { ascending: false })
-        .limit(200);
+        .select('simulator_id, start_time, end_time')
+        .gte('start_time', startOfMonth);
       if (usageErr) throw usageErr;
 
       const usageMap = {};
       allSessions?.forEach(s => {
-        usageMap[s.simulator_id] = (usageMap[s.simulator_id] || 0) + 1;
+        if (!s.simulator_id || !s.start_time) return;
+        const start = moment(s.start_time);
+        const end = s.end_time ? moment(s.end_time) : moment();
+        const minutes = Math.max(end.diff(start, 'minutes'), 0);
+        const hours = minutes / 60;
+        usageMap[s.simulator_id] = (usageMap[s.simulator_id] || 0) + hours;
       });
       
       let usageData = [];
@@ -118,8 +121,9 @@ export default function Dashboard() {
         simsData?.forEach(sim => namesMap[sim.id] = sim.name);
         
         usageData = Object.keys(usageMap)
-          .map(id => ({ name: namesMap[id] || `Sim ${id}`, sessions: usageMap[id] }))
-          .sort((a, b) => b.sessions - a.sessions).slice(0, 5);
+          .map(id => ({ name: namesMap[id] || `Sim ${id}`, hours: usageMap[id] }))
+          .sort((a, b) => b.hours - a.hours)
+          .slice(0, 5);
       }
 
       setStats({
@@ -235,10 +239,13 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-                <h3 className="text-lg font-extrabold text-slate-800 mb-8 flex items-center gap-2">
+                <h3 className="text-lg font-extrabold text-slate-800 mb-1 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-blue-500" />
-                  Most Used Simulators
+                  Most Used Simulators (by hours)
                 </h3>
+                <p className="text-xs font-semibold text-slate-400 mb-6">
+                  Total hours of usage this month per simulator
+                </p>
                 <div className="h-80">
                   {simulatorUsage.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-slate-400 font-medium">No session data available yet.</div>
@@ -253,7 +260,7 @@ export default function Dashboard() {
                           contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
                         />
                         <Bar 
-                          dataKey="sessions" 
+                          dataKey="hours" 
                           fill="#2563eb" 
                           radius={[6, 6, 0, 0]} 
                           barSize={40}
