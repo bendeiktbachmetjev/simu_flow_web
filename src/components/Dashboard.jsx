@@ -16,6 +16,8 @@ export default function Dashboard() {
     totalSimulators: 0,
     visitorsToday: 0,
     visitorsMonth: 0,
+    activeTeachers: 0,
+    activeStudents: 0,
   });
   
   const [simulatorUsage, setSimulatorUsage] = useState([]);
@@ -57,6 +59,24 @@ export default function Dashboard() {
         .select('*', { count: 'exact', head: true })
         .gte('entry_time', startOfMonth);
       if (monthErr) throw monthErr;
+
+      // Active users in center (for admins)
+      const { data: activeCenterSessions, error: activeCenterErr } = await supabase
+        .from('center_sessions')
+        .select('user_id')
+        .is('exit_time', null);
+      if (activeCenterErr) throw activeCenterErr;
+
+      const activeUserIds = [...new Set(activeCenterSessions?.map(s => s.user_id) || [])];
+      let activeTeachers = 0;
+      let activeStudents = 0;
+
+      if (activeUserIds.length > 0) {
+        const { data: activeStd } = await supabase.from('students').select('id').in('id', activeUserIds);
+        const { data: activeTch } = await supabase.from('teachers').select('id').in('id', activeUserIds);
+        activeStudents = activeStd?.length || 0;
+        activeTeachers = activeTch?.length || 0;
+      }
 
       // User Breakdown
       const { data: recentSessions, error: breakdownErr } = await supabase
@@ -107,6 +127,8 @@ export default function Dashboard() {
         activeSimulators: activeSims || 0,
         visitorsToday: todaysVisitors || 0,
         visitorsMonth: monthVisitors || 0,
+        activeTeachers,
+        activeStudents,
       });
 
       setUserBreakdown([
@@ -194,6 +216,20 @@ export default function Dashboard() {
                 value={stats.totalSimulators} 
                 icon={<LayoutDashboard className="h-7 w-7 text-amber-500" />} 
                 trend="Simulators in DB"
+              />
+              <StatCard 
+                title="Teachers In Center" 
+                value={stats.activeTeachers} 
+                icon={<Users className="h-7 w-7 text-emerald-600" />} 
+                trend="Teachers currently inside"
+                trendUp={true}
+              />
+              <StatCard 
+                title="Students In Center" 
+                value={stats.activeStudents} 
+                icon={<Users className="h-7 w-7 text-indigo-600" />} 
+                trend="Students currently inside"
+                trendUp={true}
               />
             </div>
 
