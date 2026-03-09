@@ -160,8 +160,13 @@ export default function Dashboard() {
         .or(`exit_time.is.null,exit_time.gte.${rangeStart.toISOString()}`);
       if (trafficErr) throw trafficErr;
 
-      // For simplicity and consistency in UI we show daily buckets for all ranges
-      const bucketStep = 'day';
+      // Bucket size for occupancy chart:
+      // - Today / Yesterday / Custom  -> hours
+      // - This Week / This Month / This Year -> days
+      const bucketStep =
+        timeRange === 'week' || timeRange === 'month' || timeRange === 'year'
+          ? 'day'
+          : 'hour';
 
       const buckets = [];
       const bucketIndex = {};
@@ -173,7 +178,7 @@ export default function Dashboard() {
         const key = cursor.toISOString();
         buckets.push({
           key,
-          label: cursor.format('MMM D'),
+          label: bucketStep === 'hour' ? cursor.format('HH:mm') : cursor.format('MMM D'),
           count: 0,
         });
         bucketIndex[key] = buckets.length - 1;
