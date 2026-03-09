@@ -160,11 +160,8 @@ export default function Dashboard() {
         .or(`exit_time.is.null,exit_time.gte.${rangeStart.toISOString()}`);
       if (trafficErr) throw trafficErr;
 
-      const totalDays = rangeEnd.endOf('day').diff(rangeStart.startOf('day'), 'days');
-      const bucketStep =
-        timeRange === 'week' || timeRange === 'month' || timeRange === 'year'
-          ? 'day'
-          : 'hour';
+      // For simplicity and consistency in UI we show daily buckets for all ranges
+      const bucketStep = 'day';
 
       const buckets = [];
       const bucketIndex = {};
@@ -176,7 +173,7 @@ export default function Dashboard() {
         const key = cursor.toISOString();
         buckets.push({
           key,
-          label: bucketStep === 'hour' ? cursor.format('HH:mm') : cursor.format('MMM D'),
+          label: cursor.format('MMM D'),
           count: 0,
         });
         bucketIndex[key] = buckets.length - 1;
