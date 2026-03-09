@@ -1,6 +1,38 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from './lib/supabase';
 import Dashboard from './components/Dashboard';
+import Login from './components/Login';
+import { Loader2 } from 'lucide-react';
 
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => setSession(session)
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center gap-4">
+        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+        <span className="font-semibold text-slate-600">Loading...</span>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login />;
+  }
+
   return <Dashboard />;
 }

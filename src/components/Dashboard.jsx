@@ -139,6 +139,13 @@ export default function Dashboard() {
             <div className="text-sm text-slate-500 font-semibold hidden sm:block">
               {moment().format('MMMM Do YYYY, h:mm a')}
             </div>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </button>
           </div>
         </div>
       </header>
