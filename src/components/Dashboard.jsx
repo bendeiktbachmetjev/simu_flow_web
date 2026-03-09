@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
+  PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
 import { Users, BookOpen, Activity, LayoutDashboard, LogOut } from 'lucide-react';
 import moment from 'moment';
@@ -22,12 +22,16 @@ export default function Dashboard() {
   
   const [simulatorUsage, setSimulatorUsage] = useState([]);
   const [userBreakdown, setUserBreakdown] = useState([]);
+  const [trafficData, setTrafficData] = useState([]);
+  const [timeRange, setTimeRange] = useState('today');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [timeRange, customStart, customEnd]);
 
   const fetchDashboardData = async () => {
     try {
@@ -45,8 +49,9 @@ export default function Dashboard() {
         .is('end_time', null);
       if (activeError) throw activeError;
 
-      const startOfDay = moment().startOf('day').toISOString();
-      const startOfMonth = moment().startOf('month').toISOString();
+      const now = moment();
+      const startOfDay = now.clone().startOf('day').toISOString();
+      const startOfMonth = now.clone().startOf('month').toISOString();
       
       const { count: todaysVisitors, error: todayErr } = await supabase
         .from('center_sessions')
@@ -76,6 +81,24 @@ export default function Dashboard() {
         const { data: activeTch } = await supabase.from('teachers').select('id').in('id', activeUserIds);
         activeStudents = activeStd?.length || 0;
         activeTeachers = activeTch?.length || 0;
+      }
+
+      // Time range for traffic chart
+      let rangeStart = now.clone().startOf('day');
+      let rangeEnd = now.clone();
+
+      if (timeRange === 'yesterday') {
+        rangeStart = now.clone().subtract(1, 'day').startOf('day');
+        rangeEnd = now.clone().subtract(1, 'day').endOf('day');
+      } else if (timeRange === 'week') {
+        rangeStart = now.clone().startOf('isoWeek');
+      } else if (timeRange === 'month') {
+        rangeStart = now.clone().startOf('month');
+      } else if (timeRange === 'year') {
+        rangeStart = now.clone().startOf('year');
+      } else if (timeRange === 'custom' && customStart && customEnd) {
+        rangeStart = moment(customStart).startOf('day');
+        rangeEnd = moment(customEnd).endOf('day');
       }
 
       // User Breakdown
@@ -129,6 +152,46 @@ export default function Dashboard() {
           .slice(0, 5);
       }
 
+      // Center traffic over time (visitors in center per time bucket)
+      const { data: trafficSessions, error: trafficErr } = await supabase
+        .from('center_sessions')
+        .select('entry_time, exit_time')
+        .gte('entry_time', rangeStart.toISOString())
+        .lte('entry_time', rangeEnd.toISOString());
+      if (trafficErr) throw trafficErr;
+
+      const totalDays = rangeEnd.diff(rangeStart, 'days', true);
+      const bucketStep = totalDays > 7 ? 'day' : 'hour';
+
+      const buckets = [];
+      const bucketIndex = {};
+
+      let cursor = rangeStart.clone().startOf(bucketStep);
+      const endCursor = rangeEnd.clone().endOf(bucketStep);
+
+      while (cursor.isSameOrBefore(endCursor)) {
+        const key = cursor.toISOString();
+        buckets.push({
+          key,
+          label: bucketStep === 'hour' ? cursor.format('HH:mm') : cursor.format('MMM D'),
+          count: 0,
+        });
+        bucketIndex[key] = buckets.length - 1;
+        cursor.add(1, bucketStep);
+      }
+
+      trafficSessions?.forEach(s => {
+        if (!s.entry_time) return;
+        const t = moment(s.entry_time).startOf(bucketStep);
+        if (t.isBefore(rangeStart) || t.isAfter(rangeEnd)) return;
+        // find nearest bucket key (by ISO string of startOf)
+        const key = t.toISOString();
+        const idx = bucketIndex[key];
+        if (idx !== undefined) {
+          buckets[idx].count += 1;
+        }
+      });
+
       setStats({
         totalSimulators: totalSims || 0,
         activeSimulators: activeSims || 0,
@@ -143,6 +206,7 @@ export default function Dashboard() {
         { name: 'Teachers', value: teacherCount }
       ]);
       setSimulatorUsage(usageData);
+      setTrafficData(buckets);
 
     } catch (err) {
       console.error(err);
@@ -238,6 +302,91 @@ export default function Dashboard() {
                 trend="Students currently inside"
                 trendUp={true}
               />
+            </div>
+
+            {/* Center traffic over time */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-emerald-500" />
+                    Center Occupancy Over Time
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-400 mt-1">
+                    Number of visitors inside the center across the selected period
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { id: 'today', label: 'Today' },
+                    { id: 'yesterday', label: 'Yesterday' },
+                    { id: 'week', label: 'This Week' },
+                    { id: 'month', label: 'This Month' },
+                    { id: 'year', label: 'This Year' },
+                    { id: 'custom', label: 'Custom' },
+                  ].map(option => (
+                    <button
+                      key={option.id}
+                      onClick={() => setTimeRange(option.id)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                        timeRange === option.id
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {timeRange === 'custom' && (
+                <div className="flex flex-wrap items-center gap-3 mb-6 text-xs font-semibold text-slate-600">
+                  <span>Custom range:</span>
+                  <input
+                    type="date"
+                    className="border border-slate-200 rounded-lg px-2 py-1"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                  />
+                  <span>to</span>
+                  <input
+                    type="date"
+                    className="border border-slate-200 rounded-lg px-2 py-1"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="h-80">
+                {trafficData.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-slate-400 font-medium">
+                    No visitor data for selected range.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={trafficData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontWeight: 600, fontSize: 12 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontWeight: 600, fontSize: 12 }} allowDecimals={false} />
+                      <RechartsTooltip
+                        cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                        contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value) => [`${value}`, 'Visitors']}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#2563eb"
+                        strokeWidth={3}
+                        dot={{ r: 3, strokeWidth: 1, stroke: '#eff6ff', fill: '#2563eb' }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
