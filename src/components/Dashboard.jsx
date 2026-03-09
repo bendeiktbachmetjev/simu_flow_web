@@ -152,12 +152,12 @@ export default function Dashboard() {
           .slice(0, 5);
       }
 
-      // Center traffic over time (visitors in center per time bucket)
+      // Center traffic over time (number of open sessions per bucket)
       const { data: trafficSessions, error: trafficErr } = await supabase
         .from('center_sessions')
         .select('entry_time, exit_time')
-        .gte('entry_time', rangeStart.toISOString())
-        .lte('entry_time', rangeEnd.toISOString());
+        .lte('entry_time', rangeEnd.toISOString())
+        .or(`exit_time.is.null,exit_time.gte.${rangeStart.toISOString()}`);
       if (trafficErr) throw trafficErr;
 
       const totalDays = rangeEnd.diff(rangeStart, 'days', true);
@@ -182,14 +182,21 @@ export default function Dashboard() {
 
       trafficSessions?.forEach(s => {
         if (!s.entry_time) return;
-        const t = moment(s.entry_time).startOf(bucketStep);
-        if (t.isBefore(rangeStart) || t.isAfter(rangeEnd)) return;
-        // find nearest bucket key (by ISO string of startOf)
-        const key = t.toISOString();
-        const idx = bucketIndex[key];
-        if (idx !== undefined) {
-          buckets[idx].count += 1;
-        }
+        const sessionStart = moment(s.entry_time);
+        const sessionEnd = s.exit_time ? moment(s.exit_time) : now;
+
+        buckets.forEach((bucket, index) => {
+          const bucketStart = moment(bucket.key);
+          const bucketEnd = bucketStart.clone().add(1, bucketStep);
+
+          const overlaps =
+            sessionStart.isBefore(bucketEnd) &&
+            sessionEnd.isAfter(bucketStart);
+
+          if (overlaps) {
+            buckets[index].count += 1;
+          }
+        });
       });
 
       setStats({
