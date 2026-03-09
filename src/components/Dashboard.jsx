@@ -121,7 +121,10 @@ export default function Dashboard() {
         simsData?.forEach(sim => namesMap[sim.id] = sim.name);
         
         usageData = Object.keys(usageMap)
-          .map(id => ({ name: namesMap[id] || `Sim ${id}`, hours: usageMap[id] }))
+          .map(id => ({
+            name: namesMap[id] || `Sim ${id}`,
+            hours: parseFloat(usageMap[id].toFixed(1)), // one decimal place
+          }))
           .sort((a, b) => b.hours - a.hours)
           .slice(0, 5);
       }
@@ -254,10 +257,16 @@ export default function Dashboard() {
                       <BarChart data={simulatorUsage} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontWeight: 600, fontSize: 12}} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontWeight: 600, fontSize: 12}} />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{fill: '#64748b', fontWeight: 600, fontSize: 12}}
+                          tickFormatter={(value) => value.toFixed(1)}
+                        />
                         <RechartsTooltip 
                           cursor={{fill: '#f8fafc'}} 
                           contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
+                          formatter={(value) => [`${value.toFixed(1)} h`, 'Hours']}
                         />
                         <Bar 
                           dataKey="hours" 
