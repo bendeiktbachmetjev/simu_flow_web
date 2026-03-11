@@ -65,6 +65,19 @@ export default function Dashboard() {
         .gte('entry_time', startOfMonth);
       if (monthErr) throw monthErr;
 
+      // Guest counts
+      const { count: todaysGuests, error: guestTodayErr } = await supabase
+        .from('guests')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', startOfDay);
+      if (guestTodayErr) throw guestTodayErr;
+
+      const { count: monthGuests, error: guestMonthErr } = await supabase
+        .from('guests')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', startOfMonth);
+      if (guestMonthErr) throw guestMonthErr;
+
       // Active users in center (for admins)
       const { data: activeCenterSessions, error: activeCenterErr } = await supabase
         .from('center_sessions')
@@ -118,6 +131,8 @@ export default function Dashboard() {
         studentCount = stdData?.length || 0;
         teacherCount = tchrData?.length || 0;
       }
+
+      const guestMonthCount = monthGuests || 0;
 
       // Simulator Usage List (aggregate total hours per simulator for the current month)
       const { data: allSessions, error: usageErr } = await supabase
@@ -207,15 +222,16 @@ export default function Dashboard() {
       setStats({
         totalSimulators: totalSims || 0,
         activeSimulators: activeSims || 0,
-        visitorsToday: todaysVisitors || 0,
-        visitorsMonth: monthVisitors || 0,
+        visitorsToday: (todaysVisitors || 0) + (todaysGuests || 0),
+        visitorsMonth: (monthVisitors || 0) + (monthGuests || 0),
         activeTeachers,
         activeStudents,
       });
 
       setUserBreakdown([
         { name: 'Students', value: studentCount },
-        { name: 'Teachers', value: teacherCount }
+        { name: 'Teachers', value: teacherCount },
+        { name: 'Guests', value: guestMonthCount }
       ]);
       setSimulatorUsage(usageData);
       setTrafficData(buckets);
@@ -470,7 +486,7 @@ export default function Dashboard() {
                               stroke="none"
                             >
                               {userBreakdown.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : '#8b5cf6'} />
+                                <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : index === 1 ? '#8b5cf6' : '#f59e0b'} />
                               ))}
                             </Pie>
                             <RechartsTooltip 
@@ -489,7 +505,7 @@ export default function Dashboard() {
                       <div className="flex justify-center gap-6 mt-6">
                         {userBreakdown.map((entry, index) => (
                           <div key={entry.name} className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{backgroundColor: index === 0 ? '#3b82f6' : '#8b5cf6'}}></div>
+                            <div className="w-3 h-3 rounded-full" style={{backgroundColor: index === 0 ? '#3b82f6' : index === 1 ? '#8b5cf6' : '#f59e0b'}}></div>
                             <span className="text-sm font-bold text-slate-600">{entry.name}</span>
                           </div>
                         ))}

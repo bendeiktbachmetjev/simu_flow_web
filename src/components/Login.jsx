@@ -83,12 +83,12 @@ export default function Login() {
           </div>
 
           <button
-            onClick={() => navigate('/guest')}
+            onClick={() => navigate('/guest/register')}
             id="guest-access-btn"
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-3"
           >
             <UserPlus className="w-5 h-5" />
-            Continue as Guest
+            Enter as Guest
           </button>
         </div>
       </div>

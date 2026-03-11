@@ -69,7 +69,7 @@ export default function GuestRegister() {
       <div className="max-w-md w-full">
         {/* Back button */}
         <button
-          onClick={() => navigate('/guest')}
+          onClick={() => navigate('/')}
           className="flex items-center gap-2 text-slate-500 hover:text-slate-700 font-semibold mb-6 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
