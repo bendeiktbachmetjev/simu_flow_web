@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
+import GuestLanding from './components/GuestLanding';
+import GuestRegister from './components/GuestRegister';
 import { Loader2 } from 'lucide-react';
 
-export default function App() {
+function AdminRoute() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,4 +38,16 @@ export default function App() {
   }
 
   return <Dashboard />;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/guest" element={<GuestLanding />} />
+        <Route path="/guest/register" element={<GuestRegister />} />
+        <Route path="*" element={<AdminRoute />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }

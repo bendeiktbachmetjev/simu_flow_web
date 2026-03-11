@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Lock, Loader2 } from 'lucide-react';
+import { Lock, Loader2, UserPlus } from 'lucide-react';
 
 export default function Login() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -41,7 +43,7 @@ export default function Login() {
           </div>
         )}
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           <button 
             onClick={handleGoogleLogin}
             disabled={loading}
@@ -72,6 +74,21 @@ export default function Login() {
                 Continue with Google
               </>
             )}
+          </button>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-slate-200"></div>
+            <span className="text-xs font-semibold text-slate-400 uppercase">or</span>
+            <div className="flex-1 h-px bg-slate-200"></div>
+          </div>
+
+          <button
+            onClick={() => navigate('/guest')}
+            id="guest-access-btn"
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-3"
+          >
+            <UserPlus className="w-5 h-5" />
+            Continue as Guest
           </button>
         </div>
       </div>
