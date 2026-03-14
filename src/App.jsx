@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import Login from './components/Login';
 import GuestRegister from './components/GuestRegister';
 import { Loader2 } from 'lucide-react';
+import Landing from './components/Landing';
 
 function AdminRoute() {
   const [session, setSession] = useState(null);
@@ -43,8 +44,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/admin" element={<AdminRoute />} />
         <Route path="/guest/register" element={<GuestRegister />} />
-        <Route path="*" element={<AdminRoute />} />
+        <Route path="*" element={<Landing />} />
       </Routes>
     </BrowserRouter>
   );
