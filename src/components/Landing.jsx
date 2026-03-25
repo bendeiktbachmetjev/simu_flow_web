@@ -75,22 +75,22 @@ export default function Landing() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 pb-16 pt-10 space-y-14">
-        <section className="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-10 items-center">
+        <section className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-10 items-center">
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#DCDCDC]/30 border border-[#DCDCDC]/60 text-xs font-semibold text-[#414141]/70 w-fit">
-              Minimal, fast, and secure workflows for simulation centers
+              Built specifically for simulation centers
             </div>
 
             <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
-              Guest access, without friction.
+              SimuFlow is a complete
               <span className="block text-[#414141]/80">
-                Designed to match the SimuFlow experience.
+                simulation center management system.
               </span>
             </h1>
 
             <p className="text-base sm:text-lg text-[#414141]/70 leading-relaxed max-w-xl">
-              Register guests in seconds, keep access controlled, and connect attendance with your
-              simulation workflows — all aligned with your institution&apos;s process.
+              Track attendance, mark participant activity on simulators, manage access by roles,
+              and keep the whole workflow in one platform for students, teachers, residents, and guests.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -100,7 +100,7 @@ export default function Landing() {
                 onClick={() => navigate('/guest/register')}
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-sm font-semibold text-white bg-gradient-to-br from-[#78003F] to-[#E64164] shadow-[0_8px_20px_rgba(65,65,65,0.08)] active:scale-[0.98] transition-transform"
               >
-                Start guest registration
+                Open guest web check-in
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -128,42 +128,82 @@ export default function Landing() {
 
             <div className="grid sm:grid-cols-3 gap-3 pt-2">
               <div className="rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-4">
-                <div className="text-xs font-extrabold text-[#78003F] mb-1">NFC-ready</div>
-                <div className="text-sm font-semibold text-[#414141]/80">Fast guest onboarding</div>
+                <div className="text-xs font-extrabold text-[#78003F] mb-1">Attendance control</div>
+                <div className="text-sm font-semibold text-[#414141]/80">Fast check-ins for sessions</div>
               </div>
               <div className="rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-4">
-                <div className="text-xs font-extrabold text-[#78003F] mb-1">Role-based</div>
-                <div className="text-sm font-semibold text-[#414141]/80">Clear access boundaries</div>
+                <div className="text-xs font-extrabold text-[#78003F] mb-1">Simulator activity</div>
+                <div className="text-sm font-semibold text-[#414141]/80">Who trained, where, and when</div>
               </div>
               <div className="rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-4">
-                <div className="text-xs font-extrabold text-[#78003F] mb-1">Realtime</div>
-                <div className="text-sm font-semibold text-[#414141]/80">Attendance & tracking</div>
+                <div className="text-xs font-extrabold text-[#78003F] mb-1">Center operations</div>
+                <div className="text-sm font-semibold text-[#414141]/80">One coordinated workflow</div>
               </div>
             </div>
           </div>
 
-          <div className="relative">
-            <div className="absolute -inset-6 bg-gradient-to-br from-[#78003F]/10 to-[#E64164]/10 blur-3xl opacity-70" />
-            <div className="relative rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-4">
-              <div className="grid grid-cols-3 gap-3">
-                <img
-                  src="/media/mock1.png"
-                  alt="SimuFlow mockup 1"
-                  className="w-full h-40 sm:h-44 object-cover rounded-[16px] bg-[#DCDCDC]/30"
-                />
-                <img
-                  src="/media/mock2.png"
-                  alt="SimuFlow mockup 2"
-                  className="w-full h-40 sm:h-44 object-cover rounded-[16px] bg-[#DCDCDC]/30"
-                />
-                <img
-                  src="/media/mock3.png"
-                  alt="SimuFlow mockup 3"
-                  className="w-full h-40 sm:h-44 object-cover rounded-[16px] bg-[#DCDCDC]/30"
-                />
+          <div className="relative rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-6 overflow-hidden">
+            <div className="absolute -top-16 -right-12 w-44 h-44 bg-[#E64164]/10 rounded-full blur-2xl" />
+            <div className="absolute -bottom-16 -left-10 w-52 h-52 bg-[#78003F]/10 rounded-full blur-2xl" />
+            <div className="relative h-[430px] sm:h-[520px]">
+              <img
+                src="/media/mock2.png"
+                alt="SimuFlow mobile attendance screen"
+                className="absolute left-1/2 -translate-x-[62%] top-4 h-[80%] sm:h-[82%] object-contain drop-shadow-[0_8px_20px_rgba(65,65,65,0.18)]"
+              />
+              <img
+                src="/media/mock1.png"
+                alt="SimuFlow mobile simulator tracking screen"
+                className="absolute left-1/2 -translate-x-[8%] top-0 h-[86%] sm:h-[88%] object-contain drop-shadow-[0_8px_20px_rgba(65,65,65,0.2)]"
+              />
+              <img
+                src="/media/mock3.png"
+                alt="SimuFlow mobile analytics screen"
+                className="absolute left-1/2 -translate-x-[116%] top-14 h-[72%] sm:h-[75%] object-contain drop-shadow-[0_8px_20px_rgba(65,65,65,0.16)]"
+              />
+            </div>
+            <div className="relative grid sm:grid-cols-2 gap-3 mt-3">
+              <div className="rounded-[16px] bg-[#DCDCDC]/30 p-3">
+                <div className="text-xs font-extrabold text-[#78003F]">Live attendance</div>
+                <div className="text-xs font-semibold text-[#414141]/70 mt-1">
+                  Mark presence instantly and keep reliable session logs.
+                </div>
               </div>
-              <div className="mt-4 text-xs text-[#414141]/60 font-semibold">
-                Product previews (web guest flow)
+              <div className="rounded-[16px] bg-[#DCDCDC]/30 p-3">
+                <div className="text-xs font-extrabold text-[#78003F]">Asset usage history</div>
+                <div className="text-xs font-semibold text-[#414141]/70 mt-1">
+                  Track simulator utilization across workshops and groups.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-6 sm:p-8">
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            Why simulation centers choose SimuFlow
+          </h2>
+          <p className="mt-3 text-sm sm:text-base text-[#414141]/75 max-w-4xl">
+            SimuFlow is not just a guest form. It is an operational layer for the entire center:
+            attendance, simulator activity, role-based access, and transparent reporting in one ecosystem.
+          </p>
+          <div className="mt-6 grid md:grid-cols-3 gap-4">
+            <div className="rounded-[16px] bg-[#DCDCDC]/30 p-4">
+              <div className="text-sm font-extrabold text-[#78003F]">For administrators</div>
+              <div className="text-sm font-semibold text-[#414141]/75 mt-1">
+                Control access, monitor occupancy, and see utilization in real time.
+              </div>
+            </div>
+            <div className="rounded-[16px] bg-[#DCDCDC]/30 p-4">
+              <div className="text-sm font-extrabold text-[#78003F]">For educators</div>
+              <div className="text-sm font-semibold text-[#414141]/75 mt-1">
+                Run sessions with clear participant records and simulator engagement history.
+              </div>
+            </div>
+            <div className="rounded-[16px] bg-[#DCDCDC]/30 p-4">
+              <div className="text-sm font-extrabold text-[#78003F]">For guests and learners</div>
+              <div className="text-sm font-semibold text-[#414141]/75 mt-1">
+                Join quickly, check in smoothly, and follow a simple guided workflow.
               </div>
             </div>
           </div>
