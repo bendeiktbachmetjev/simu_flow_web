@@ -6,6 +6,8 @@ import Login from './components/Login';
 import GuestRegister from './components/GuestRegister';
 import { Loader2 } from 'lucide-react';
 import Landing from './components/Landing';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfUse from './components/TermsOfUse';
 
 function AdminRoute() {
   const [session, setSession] = useState(null);
@@ -45,6 +47,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfUse />} />
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/guest/register" element={<GuestRegister />} />
         <Route path="*" element={<Landing />} />

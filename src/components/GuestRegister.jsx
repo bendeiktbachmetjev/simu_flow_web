@@ -408,7 +408,25 @@ export default function GuestRegister() {
                   required
                 />
                 <span className="text-sm font-semibold text-[#414141]/90 leading-relaxed">
-                  I agree to the Terms and Privacy Policy.
+                  I agree to the{' '}
+                  <a
+                    href="/terms"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[#78003F] hover:underline"
+                  >
+                    Terms of Use
+                  </a>{' '}
+                  and{' '}
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[#78003F] hover:underline"
+                  >
+                    Privacy Policy
+                  </a>
+                  .
                 </span>
               </label>
 

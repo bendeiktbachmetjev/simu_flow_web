@@ -1,54 +1,71 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, ShieldCheck, FileText, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, ShieldCheck, FileText } from 'lucide-react';
+import appIcon from '../assets/app-icon.png';
+
+function GooglePlayIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" {...props}>
+      <path d="M3.6 2.5c-.4.3-.6.8-.6 1.4v16.2c0 .6.2 1.1.6 1.4l10.3-9.5L3.6 2.5z" fill="#414141" opacity="0.85" />
+      <path d="M14.5 11.9l2.7-2.5-3.1-1.8-9.1-5.1 9.5 9.4z" fill="#78003F" opacity="0.95" />
+      <path d="M14.1 16.4l3.1-1.8-2.7-2.5-9.5 9.4 9.1-5.1z" fill="#E64164" opacity="0.95" />
+      <path d="M18 9.9l2.2 1.2c.9.5.9 1.3 0 1.8L18 14.1l-3.1-2.1L18 9.9z" fill="#414141" opacity="0.65" />
+    </svg>
+  );
+}
+
+function AppleIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" {...props}>
+      <path
+        d="M16.9 12.7c0-1.9 1.5-2.8 1.6-2.9-0.9-1.3-2.2-1.5-2.7-1.5-1.1-0.1-2.2 0.6-2.7 0.6s-1.4-0.6-2.4-0.6c-1.2 0-2.3 0.7-2.9 1.7-1.2 2.1-0.3 5.2 0.9 6.9 0.6 0.9 1.3 1.8 2.2 1.8 0.9 0 1.2-0.6 2.3-0.6 1 0 1.3 0.6 2.3 0.6 1 0 1.6-0.9 2.2-1.8 0.7-1 1-1.9 1-2 0 0-1.8-0.7-1.8-3.2z"
+        fill="#414141"
+        opacity="0.85"
+      />
+      <path
+        d="M14.5 6.7c0.5-0.6 0.8-1.5 0.7-2.4-0.8 0-1.7 0.5-2.2 1.1-0.5 0.6-0.9 1.5-0.7 2.4 0.9 0.1 1.7-0.4 2.2-1.1z"
+        fill="#414141"
+        opacity="0.85"
+      />
+    </svg>
+  );
+}
 
 export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-50">
-      <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-30">
+    <div className="min-h-screen bg-[#FFFFFF] text-[#414141]">
+      <header className="sticky top-0 z-30 bg-[#FFFFFF]/80 backdrop-blur border-b border-[#DCDCDC]/60">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-[16px] bg-[#DCDCDC]/40 overflow-hidden shadow-[0_8px_20px_rgba(65,65,65,0.08)]">
+              <img src={appIcon} alt="SimuFlow" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="font-extrabold tracking-tight text-lg">SimuFlow</div>
-              <div className="text-xs text-slate-400">Simulation Center Management Platform</div>
+              <div className="text-xs text-[#414141]/60">Simulation Center Management Platform</div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-sm">
-            <button
-              type="button"
-              onClick={() => {
-                const el = document.getElementById('privacy');
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth' });
-                }
-              }}
-              className="hidden sm:inline-flex px-3 py-1.5 rounded-full text-slate-300 hover:text-slate-50 hover:bg-slate-800 transition-colors"
+          <div className="flex items-center gap-2 text-sm">
+            <a
+              href="/privacy"
+              className="hidden sm:inline-flex px-3 py-1.5 rounded-full text-[#414141]/70 hover:text-[#414141] hover:bg-[#DCDCDC]/30 transition-colors"
             >
               Privacy
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const el = document.getElementById('terms');
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth' });
-                }
-              }}
-              className="hidden sm:inline-flex px-3 py-1.5 rounded-full text-slate-300 hover:text-slate-50 hover:bg-slate-800 transition-colors"
+            </a>
+            <a
+              href="/terms"
+              className="hidden sm:inline-flex px-3 py-1.5 rounded-full text-[#414141]/70 hover:text-[#414141] hover:bg-[#DCDCDC]/30 transition-colors"
             >
               Terms
-            </button>
+            </a>
             <button
               id="admin-login-btn"
               type="button"
               onClick={() => navigate('/admin')}
-              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold bg-slate-100 text-slate-900 hover:bg-white transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold bg-[#DCDCDC]/40 text-[#414141] hover:bg-[#DCDCDC]/55 transition-colors"
             >
               Admin sign in
               <ArrowRight className="w-4 h-4" />
@@ -57,243 +74,140 @@ export default function Landing() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 pb-16 pt-10 space-y-16">
-        {/* Hero */}
-        <section className="grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-10 items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-900/70 border border-slate-700 text-xs text-slate-300 mb-4">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Designed for medical simulation centers
+      <main className="max-w-6xl mx-auto px-4 pb-16 pt-10 space-y-14">
+        <section className="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-10 items-center">
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#DCDCDC]/30 border border-[#DCDCDC]/60 text-xs font-semibold text-[#414141]/70 w-fit">
+              Minimal, fast, and secure workflows for simulation centers
             </div>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-50 mb-4">
-              Run high‑fidelity simulations
-              <span className="block bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-sky-300 to-emerald-300">
-                with zero administrative chaos.
+
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
+              Guest access, without friction.
+              <span className="block text-[#414141]/80">
+                Designed to match the SimuFlow experience.
               </span>
             </h1>
-            <p className="text-slate-300 text-base sm:text-lg leading-relaxed mb-6">
-              SimuFlow is a web and mobile platform that connects students, teachers, residents and
-              simulation staff in one place. Schedule sessions, track presence, manage simulators
-              and provide guests with guided access — all with real‑time data from your center.
+
+            <p className="text-base sm:text-lg text-[#414141]/70 leading-relaxed max-w-xl">
+              Register guests in seconds, keep access controlled, and connect attendance with your
+              simulation workflows — all aligned with your institution&apos;s process.
             </p>
-            <ul className="grid sm:grid-cols-2 gap-3 text-sm text-slate-200 mb-8">
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400" />
-                <span>Role‑based flows for students, teachers, residents and guests.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400" />
-                <span>Real‑time simulator availability and attendance tracking.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400" />
-                <span>Temporary guest access without installing the mobile app.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400" />
-                <span>Secure integration with your existing authentication and Supabase backend.</span>
-              </li>
-            </ul>
 
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 id="guest-start-btn"
                 type="button"
                 onClick={() => navigate('/guest/register')}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30 hover:from-blue-400 hover:to-indigo-400 transition-transform active:scale-[0.98]"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-sm font-semibold text-white bg-gradient-to-br from-[#78003F] to-[#E64164] shadow-[0_8px_20px_rgba(65,65,65,0.08)] active:scale-[0.98] transition-transform"
               >
-                Start as guest
+                Start guest registration
                 <ArrowRight className="w-4 h-4" />
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const el = document.getElementById('how-it-works');
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth' });
-                  }
-                }}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-semibold bg-slate-900/80 border border-slate-700 text-slate-100 hover:bg-slate-800 transition-colors"
-              >
-                Learn how it works
-              </button>
+
+              <div className="flex gap-3">
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.simuflow.app&pli=1"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-full text-sm font-semibold bg-[#DCDCDC]/40 hover:bg-[#DCDCDC]/55 transition-colors"
+                >
+                  <GooglePlayIcon className="w-5 h-5" />
+                  Google Play
+                </a>
+                <a
+                  href="https://apps.apple.com/lt/app/simuflow/id6760581109"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-full text-sm font-semibold bg-[#DCDCDC]/40 hover:bg-[#DCDCDC]/55 transition-colors"
+                >
+                  <AppleIcon className="w-5 h-5" />
+                  App Store
+                </a>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-3 pt-2">
+              <div className="rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-4">
+                <div className="text-xs font-extrabold text-[#78003F] mb-1">NFC-ready</div>
+                <div className="text-sm font-semibold text-[#414141]/80">Fast guest onboarding</div>
+              </div>
+              <div className="rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-4">
+                <div className="text-xs font-extrabold text-[#78003F] mb-1">Role-based</div>
+                <div className="text-sm font-semibold text-[#414141]/80">Clear access boundaries</div>
+              </div>
+              <div className="rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-4">
+                <div className="text-xs font-extrabold text-[#78003F] mb-1">Realtime</div>
+                <div className="text-sm font-semibold text-[#414141]/80">Attendance & tracking</div>
+              </div>
             </div>
           </div>
 
           <div className="relative">
-            <div className="absolute -inset-8 bg-gradient-to-tr from-blue-500/20 via-sky-400/10 to-emerald-400/10 blur-3xl opacity-70" />
-            <div className="relative bg-slate-900/80 border border-slate-700/80 rounded-3xl p-5 shadow-2xl shadow-slate-900/80">
-              <div className="text-xs font-semibold text-slate-400 mb-3">High‑level overview</div>
-              <div className="space-y-3 text-xs text-slate-200">
-                <div className="flex items-start gap-3">
-                  <div className="mt-1 w-1 h-10 rounded-full bg-blue-400" />
-                  <div>
-                    <div className="font-semibold text-sm">Simulation center</div>
-                    <p className="text-slate-300">
-                      Configures simulators, rooms, and institution‑specific rules for sessions and access.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="mt-1 w-1 h-10 rounded-full bg-sky-400" />
-                  <div>
-                    <div className="font-semibold text-sm">Educators & coordinators</div>
-                    <p className="text-slate-300">
-                      Plan sessions, assign learners, create schedules and monitor participation analytics.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="mt-1 w-1 h-10 rounded-full bg-emerald-400" />
-                  <div>
-                    <div className="font-semibold text-sm">Learners & guests</div>
-                    <p className="text-slate-300">
-                      Join sessions, confirm presence and interact with simulators using mobile or guest web access.
-                    </p>
-                  </div>
-                </div>
+            <div className="absolute -inset-6 bg-gradient-to-br from-[#78003F]/10 to-[#E64164]/10 blur-3xl opacity-70" />
+            <div className="relative rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-4">
+              <div className="grid grid-cols-3 gap-3">
+                <img
+                  src="/media/mock1.png"
+                  alt="SimuFlow mockup 1"
+                  className="w-full h-40 sm:h-44 object-cover rounded-[16px] bg-[#DCDCDC]/30"
+                />
+                <img
+                  src="/media/mock2.png"
+                  alt="SimuFlow mockup 2"
+                  className="w-full h-40 sm:h-44 object-cover rounded-[16px] bg-[#DCDCDC]/30"
+                />
+                <img
+                  src="/media/mock3.png"
+                  alt="SimuFlow mockup 3"
+                  className="w-full h-40 sm:h-44 object-cover rounded-[16px] bg-[#DCDCDC]/30"
+                />
+              </div>
+              <div className="mt-4 text-xs text-[#414141]/60 font-semibold">
+                Product previews (web guest flow)
               </div>
             </div>
           </div>
         </section>
 
-        {/* How it works */}
-        <section id="how-it-works" className="space-y-6">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-50">
-            How SimuFlow works
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6 text-sm text-slate-200">
-            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
-              <div className="text-xs font-semibold text-slate-400 mb-2">1 · Configure</div>
-              <h3 className="font-semibold mb-2 text-slate-50">Set up your center</h3>
-              <p className="text-slate-300">
-                Define simulators, rooms and institutions. Configure who can access which simulator,
-                and how presence is confirmed (NFC, QR, manual confirmation and more).
-              </p>
-            </div>
-            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
-              <div className="text-xs font-semibold text-slate-400 mb-2">2 · Orchestrate</div>
-              <h3 className="font-semibold mb-2 text-slate-50">Plan and run sessions</h3>
-              <p className="text-slate-300">
-                Teachers and coordinators schedule sessions, connect groups of learners and assign
-                simulators. The system guides each participant through the session flow.
-              </p>
-            </div>
-            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
-              <div className="text-xs font-semibold text-slate-400 mb-2">3 · Observe</div>
-              <h3 className="font-semibold mb-2 text-slate-50">Track activity in real time</h3>
-              <p className="text-slate-300">
-                See who is present, which simulators are busy, and how resources are utilized across
-                days and weeks. Export data to your institutional systems if required.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Privacy & Terms */}
-        <section
-          id="privacy"
-          className="grid md:grid-cols-2 gap-6 items-start border-t border-slate-800 pt-10"
-        >
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-xs font-semibold mb-2">
-              <ShieldCheck className="w-4 h-4" />
-              Data protection & compliance
-            </div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-50">Privacy Policy</h2>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              This summary explains how SimuFlow processes personal data when used by your
-              institution. The exact legal terms may be further specified in a separate data
-              processing agreement with your organization.
-            </p>
-            <ul className="list-disc list-inside text-sm text-slate-200 space-y-2">
-              <li>
-                <span className="font-semibold">Categories of data.</span> We process identification
-                and contact details, institutional affiliation, session participation information and
-                technical logs required to operate the platform.
-              </li>
-              <li>
-                <span className="font-semibold">Purpose of processing.</span> Data is used to plan,
-                deliver and document simulation activities, provide access control to simulators,
-                and generate analytics required by the institution.
-              </li>
-              <li>
-                <span className="font-semibold">Legal basis.</span> The legal basis is typically the
-                legitimate interest of the institution in managing education and training, or
-                contractual necessity where a direct agreement exists.
-              </li>
-              <li>
-                <span className="font-semibold">Data sharing.</span> Personal data is only shared
-                with service providers that support hosting, logging and communication under data
-                processing agreements, or with the institution that operates the center.
-              </li>
-              <li>
-                <span className="font-semibold">Retention.</span> Session and attendance data is
-                retained for as long as required by the institution&apos;s academic or regulatory
-                policies, after which it is deleted or anonymized.
-              </li>
-              <li>
-                <span className="font-semibold">Data subject rights.</span> Depending on your
-                jurisdiction, you may have rights of access, rectification, deletion, restriction or
-                objection. These requests are usually handled in cooperation with your institution.
-              </li>
-            </ul>
-          </div>
-
-          <div
-            id="terms"
-            className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 space-y-4"
+        <section className="grid md:grid-cols-2 gap-6">
+          <a
+            href="/privacy"
+            className="group rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-6 hover:bg-[#DCDCDC]/15 transition-colors"
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-slate-200 text-xs font-semibold">
-              <FileText className="w-4 h-4" />
-              Terms of Use (summary)
+            <div className="inline-flex items-center gap-2 text-xs font-extrabold text-[#78003F]">
+              <ShieldCheck className="w-4 h-4" />
+              Privacy
             </div>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              By accessing SimuFlow as a student, teacher, resident, guest or administrator, you
-              agree to use the platform only in accordance with your institution&apos;s policies and
-              applicable law.
-            </p>
-            <ul className="list-disc list-inside text-sm text-slate-200 space-y-2">
-              <li>
-                <span className="font-semibold">Authorized use.</span> Access is limited to
-                individuals who have been invited or onboarded by the institution or simulation
-                center operating SimuFlow.
-              </li>
-              <li>
-                <span className="font-semibold">Account responsibility.</span> If you are provided
-                with login credentials, you are responsible for keeping them confidential and for
-                all actions performed under your account.
-              </li>
-              <li>
-                <span className="font-semibold">Content and conduct.</span> You must not misuse the
-                platform, attempt to gain unauthorized access, or interfere with simulations or
-                other users.
-              </li>
-              <li>
-                <span className="font-semibold">Availability and changes.</span> The service may be
-                updated, suspended or modified by the institution or provider in order to improve
-                functionality, maintain security or comply with regulations.
-              </li>
-              <li>
-                <span className="font-semibold">No medical advice.</span> SimuFlow is a training and
-                management tool and does not provide medical advice or replace clinical judgement.
-              </li>
-              <li>
-                <span className="font-semibold">Limitation of liability.</span> To the maximum
-                extent permitted by law, the platform is provided &quot;as is&quot; and any
-                liability is limited in accordance with the contract between the provider and the
-                institution.
-              </li>
-            </ul>
-            <p className="text-xs text-slate-500">
-              This section is a high‑level summary. The full legally binding version of the Privacy
-              Policy and Terms of Use can be provided to your institution and may differ depending
-              on jurisdiction and deployment model.
-            </p>
-          </div>
+            <div className="mt-2 text-lg font-extrabold">Privacy Policy</div>
+            <div className="mt-1 text-sm text-[#414141]/70">
+              Read how guest data is handled, retained, and protected.
+            </div>
+            <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#414141]/80 group-hover:text-[#414141]">
+              Open
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </a>
+
+          <a
+            href="/terms"
+            className="group rounded-[24px] border border-[#DCDCDC]/60 bg-[#FFFFFF] shadow-[0_8px_20px_rgba(65,65,65,0.08)] p-6 hover:bg-[#DCDCDC]/15 transition-colors"
+          >
+            <div className="inline-flex items-center gap-2 text-xs font-extrabold text-[#78003F]">
+              <FileText className="w-4 h-4" />
+              Terms
+            </div>
+            <div className="mt-2 text-lg font-extrabold">Terms of Use</div>
+            <div className="mt-1 text-sm text-[#414141]/70">
+              Review the usage rules and limitations for guests.
+            </div>
+            <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#414141]/80 group-hover:text-[#414141]">
+              Open
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </a>
         </section>
 
-        <footer className="border-t border-slate-800 pt-6 text-xs text-slate-500 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+        <footer className="pt-6 text-xs text-[#414141]/60 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between border-t border-[#DCDCDC]/60">
           <span>© {new Date().getFullYear()} SimuFlow. All rights reserved.</span>
           <span>For institutional use in simulation and training environments.</span>
         </footer>
