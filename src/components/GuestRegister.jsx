@@ -4,6 +4,205 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 import appIcon from '../assets/app-icon.png';
 
+const COUNTRIES = [
+  'Afghanistan',
+  'Albania',
+  'Algeria',
+  'Andorra',
+  'Angola',
+  'Antigua and Barbuda',
+  'Argentina',
+  'Armenia',
+  'Australia',
+  'Austria',
+  'Azerbaijan',
+  'Bahamas',
+  'Bahrain',
+  'Bangladesh',
+  'Barbados',
+  'Belarus',
+  'Belgium',
+  'Belize',
+  'Benin',
+  'Bhutan',
+  'Bolivia',
+  'Bosnia and Herzegovina',
+  'Botswana',
+  'Brazil',
+  'Brunei',
+  'Bulgaria',
+  'Burkina Faso',
+  'Burundi',
+  'Cabo Verde',
+  'Cambodia',
+  'Cameroon',
+  'Canada',
+  'Central African Republic',
+  'Chad',
+  'Chile',
+  'China',
+  'Colombia',
+  'Comoros',
+  'Congo (Congo-Brazzaville)',
+  'Costa Rica',
+  'Croatia',
+  'Cuba',
+  'Cyprus',
+  'Czechia',
+  'Democratic Republic of the Congo',
+  'Denmark',
+  'Djibouti',
+  'Dominica',
+  'Dominican Republic',
+  'Ecuador',
+  'Egypt',
+  'El Salvador',
+  'Equatorial Guinea',
+  'Eritrea',
+  'Estonia',
+  'Eswatini',
+  'Ethiopia',
+  'Fiji',
+  'Finland',
+  'France',
+  'Gabon',
+  'Gambia',
+  'Georgia',
+  'Germany',
+  'Ghana',
+  'Greece',
+  'Grenada',
+  'Guatemala',
+  'Guinea',
+  'Guinea-Bissau',
+  'Guyana',
+  'Haiti',
+  'Honduras',
+  'Hungary',
+  'Iceland',
+  'India',
+  'Indonesia',
+  'Iran',
+  'Iraq',
+  'Ireland',
+  'Israel',
+  'Italy',
+  'Jamaica',
+  'Japan',
+  'Jordan',
+  'Kazakhstan',
+  'Kenya',
+  'Kiribati',
+  'Kuwait',
+  'Kyrgyzstan',
+  'Laos',
+  'Latvia',
+  'Lebanon',
+  'Lesotho',
+  'Liberia',
+  'Libya',
+  'Liechtenstein',
+  'Lithuania',
+  'Luxembourg',
+  'Madagascar',
+  'Malawi',
+  'Malaysia',
+  'Maldives',
+  'Mali',
+  'Malta',
+  'Marshall Islands',
+  'Mauritania',
+  'Mauritius',
+  'Mexico',
+  'Micronesia',
+  'Moldova',
+  'Monaco',
+  'Mongolia',
+  'Montenegro',
+  'Morocco',
+  'Mozambique',
+  'Myanmar (Burma)',
+  'Namibia',
+  'Nauru',
+  'Nepal',
+  'Netherlands',
+  'New Zealand',
+  'Nicaragua',
+  'Niger',
+  'Nigeria',
+  'North Korea',
+  'North Macedonia',
+  'Norway',
+  'Oman',
+  'Pakistan',
+  'Palau',
+  'Panama',
+  'Papua New Guinea',
+  'Paraguay',
+  'Peru',
+  'Philippines',
+  'Poland',
+  'Portugal',
+  'Qatar',
+  'Romania',
+  'Russia',
+  'Rwanda',
+  'Saint Kitts and Nevis',
+  'Saint Lucia',
+  'Saint Vincent and the Grenadines',
+  'Samoa',
+  'San Marino',
+  'Sao Tome and Principe',
+  'Saudi Arabia',
+  'Senegal',
+  'Serbia',
+  'Seychelles',
+  'Sierra Leone',
+  'Singapore',
+  'Slovakia',
+  'Slovenia',
+  'Solomon Islands',
+  'Somalia',
+  'South Africa',
+  'South Korea',
+  'South Sudan',
+  'Spain',
+  'Sri Lanka',
+  'Sudan',
+  'Suriname',
+  'Sweden',
+  'Switzerland',
+  'Syria',
+  'Taiwan',
+  'Tajikistan',
+  'Tanzania',
+  'Thailand',
+  'Timor-Leste',
+  'Togo',
+  'Tonga',
+  'Trinidad and Tobago',
+  'Tunisia',
+  'Turkey',
+  'Turkmenistan',
+  'Tuvalu',
+  'Uganda',
+  'Ukraine',
+  'United Arab Emirates',
+  'United Kingdom',
+  'United States',
+  'Uruguay',
+  'Uzbekistan',
+  'Vanuatu',
+  'Vatican City',
+  'Venezuela',
+  'Vietnam',
+  'Yemen',
+  'Zambia',
+  'Zimbabwe',
+];
+
+const COUNTRY_SET = new Set(COUNTRIES.map((c) => c.toLowerCase()));
+
 export default function GuestRegister() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -12,13 +211,16 @@ export default function GuestRegister() {
     email: '',
     country: '',
     affiliation: '',
+    termsAccepted: false,
+    marketingOptIn: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, type, checked, value } = e.target;
+    setForm({ ...form, [name]: type === 'checkbox' ? checked : value });
   };
 
   const handleSubmit = async (e) => {
@@ -27,14 +229,25 @@ export default function GuestRegister() {
     setError(null);
 
     try {
+      if (!form.termsAccepted) {
+        throw new Error('You must agree to the Terms to continue.');
+      }
+
+      const countryInput = form.country.trim();
+      if (!COUNTRY_SET.has(countryInput.toLowerCase())) {
+        throw new Error('Please select a country from the list.');
+      }
+
       const { error: insertError } = await supabase
         .from('guests')
         .insert([{
           first_name: form.first_name.trim(),
           last_name: form.last_name.trim(),
           email: form.email.trim().toLowerCase(),
-          country: form.country.trim(),
+          country: countryInput,
           affiliation: form.affiliation.trim(),
+          terms_accepted: true,
+          marketing_opt_in: form.marketingOptIn,
         }]);
 
       if (insertError) throw insertError;
@@ -158,9 +371,15 @@ export default function GuestRegister() {
                 onChange={handleChange}
                 required
                 autoComplete="country-name"
-                placeholder="e.g. Germany"
+                placeholder="Start typing to search..."
+                list="country-list"
                 className="w-full px-4 py-3 rounded-[16px] border border-transparent bg-[#DCDCDC]/40 text-[#414141] font-medium placeholder:text-[#414141]/40 focus:outline-none focus:ring-2 focus:ring-[#78003F] focus:bg-[#DCDCDC]/30 transition-all"
               />
+              <datalist id="country-list">
+                {COUNTRIES.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
             </div>
 
             <div>
@@ -176,6 +395,35 @@ export default function GuestRegister() {
                 placeholder="Institute or organization"
                 className="w-full px-4 py-3 rounded-[16px] border border-transparent bg-[#DCDCDC]/40 text-[#414141] font-medium placeholder:text-[#414141]/40 focus:outline-none focus:ring-2 focus:ring-[#78003F] focus:bg-[#DCDCDC]/30 transition-all"
               />
+            </div>
+
+            <div className="space-y-3 pt-1">
+              <label className="flex items-start gap-3 select-none">
+                <input
+                  type="checkbox"
+                  name="termsAccepted"
+                  checked={form.termsAccepted}
+                  onChange={handleChange}
+                  className="mt-1 h-5 w-5 rounded border-[#DCDCDC] text-[#78003F] focus:ring-[#78003F]"
+                  required
+                />
+                <span className="text-sm font-semibold text-[#414141]/90 leading-relaxed">
+                  I agree to the Terms and Privacy Policy.
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 select-none">
+                <input
+                  type="checkbox"
+                  name="marketingOptIn"
+                  checked={form.marketingOptIn}
+                  onChange={handleChange}
+                  className="mt-1 h-5 w-5 rounded border-[#DCDCDC] text-[#78003F] focus:ring-[#78003F]"
+                />
+                <span className="text-sm font-semibold text-[#414141]/80 leading-relaxed">
+                  I want to receive emails and updates.
+                </span>
+              </label>
             </div>
 
             <button
