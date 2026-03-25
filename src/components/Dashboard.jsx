@@ -7,8 +7,9 @@ import {
 import { Users, BookOpen, Activity, LayoutDashboard, LogOut } from 'lucide-react';
 import moment from 'moment';
 import StatCard from './StatCard';
+import appIcon from '../assets/app-icon.png';
 
-const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#78003F', '#E64164', '#414141', '#DCDCDC', '#8b5cf6'];
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -245,24 +246,24 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] via-[#DCDCDC]/20 to-[#FFFFFF] text-[#414141] font-sans">
+      <header className="bg-[#FFFFFF]/80 backdrop-blur border-b border-[#DCDCDC]/60 shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg shadow-sm shadow-blue-200">
-              <LayoutDashboard className="h-5 w-5 text-white" />
+            <div className="w-9 h-9 rounded-[12px] bg-[#DCDCDC]/40 overflow-hidden shadow-[0_8px_20px_rgba(65,65,65,0.08)]">
+              <img src={appIcon} alt="SimuFlow" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-600">
+            <h1 className="text-xl font-extrabold text-[#414141]">
               SimuFlow Analytics
             </h1>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-sm text-slate-500 font-semibold hidden sm:block">
+            <div className="text-sm text-[#414141]/70 font-semibold hidden sm:block">
               {moment().format('MMMM Do YYYY, h:mm a')}
             </div>
             <button
               onClick={() => supabase.auth.signOut()}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#DCDCDC]/80 hover:bg-[#DCDCDC]/30 text-[#414141] font-semibold transition-colors"
             >
               <LogOut className="h-4 w-4" />
               Sign Out
@@ -273,16 +274,16 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl shadow-sm">
-            <h3 className="font-bold text-red-800 mb-1">Error Loading Data</h3>
+          <div className="bg-[#E64164]/10 border border-[#E64164]/20 text-[#E64164] px-6 py-4 rounded-[16px] shadow-sm">
+            <h3 className="font-bold text-[#E64164] mb-1">Error Loading Data</h3>
             <p className="text-sm">{error}</p>
           </div>
         )}
 
         {loading ? (
           <div className="flex justify-center py-32">
-            <div className="flex flex-col items-center gap-4 text-blue-600">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-t-4 border-blue-600 border-opacity-30"></div>
+            <div className="flex flex-col items-center gap-4 text-[#78003F]">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-t-4 border-[#78003F] border-opacity-30"></div>
               <span className="font-bold tracking-wide">Crunching the numbers...</span>
             </div>
           </div>
@@ -292,55 +293,55 @@ export default function Dashboard() {
               <StatCard 
                 title="Visitors Today" 
                 value={stats.visitorsToday} 
-                icon={<Users className="h-7 w-7 text-blue-600" />} 
+                icon={<Users className="h-7 w-7 text-[#78003F]" />} 
                 trend="Active Today"
                 trendUp={true}
               />
               <StatCard 
                 title="Active Simulators" 
                 value={`${stats.activeSimulators} / ${stats.totalSimulators}`} 
-                icon={<Activity className="h-7 w-7 text-emerald-500" />} 
+                icon={<Activity className="h-7 w-7 text-[#E64164]" />} 
                 trend="Live Updates"
                 trendUp={true}
               />
               <StatCard 
                 title="Monthly Footprint" 
                 value={stats.visitorsMonth} 
-                icon={<BookOpen className="h-7 w-7 text-purple-500" />} 
+                icon={<BookOpen className="h-7 w-7 text-[#414141]" />} 
                 trend="This Month"
                 trendUp={true}
               />
               <StatCard 
                 title="Total Assets" 
                 value={stats.totalSimulators} 
-                icon={<LayoutDashboard className="h-7 w-7 text-amber-500" />} 
+                icon={<LayoutDashboard className="h-7 w-7 text-[#78003F]" />} 
                 trend="Simulators in DB"
               />
               <StatCard 
                 title="Teachers In Center" 
                 value={stats.activeTeachers} 
-                icon={<Users className="h-7 w-7 text-emerald-600" />} 
+                icon={<Users className="h-7 w-7 text-[#E64164]" />} 
                 trend="Teachers currently inside"
                 trendUp={true}
               />
               <StatCard 
                 title="Students In Center" 
                 value={stats.activeStudents} 
-                icon={<Users className="h-7 w-7 text-indigo-600" />} 
+                icon={<Users className="h-7 w-7 text-[#414141]" />} 
                 trend="Students currently inside"
                 trendUp={true}
               />
             </div>
 
             {/* Center traffic over time */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
+            <div className="bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                 <div>
-                  <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-emerald-500" />
+                  <h3 className="text-lg font-extrabold text-[#414141] flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-[#78003F]" />
                     Center Occupancy Over Time
                   </h3>
-                  <p className="text-xs font-semibold text-slate-400 mt-1">
+                  <p className="text-xs font-semibold text-[#414141]/60 mt-1">
                     Number of visitors inside the center across the selected period
                   </p>
                 </div>
@@ -358,8 +359,8 @@ export default function Dashboard() {
                       onClick={() => setTimeRange(option.id)}
                       className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
                         timeRange === option.id
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          ? 'bg-gradient-to-br from-[#78003F] to-[#E64164] text-white border-transparent'
+                          : 'bg-[#FFFFFF] text-[#414141]/80 border-[#DCDCDC] hover:bg-[#DCDCDC]/20'
                       }`}
                     >
                       {option.label}
@@ -369,18 +370,18 @@ export default function Dashboard() {
               </div>
 
               {timeRange === 'custom' && (
-                <div className="flex flex-wrap items-center gap-3 mb-6 text-xs font-semibold text-slate-600">
+                <div className="flex flex-wrap items-center gap-3 mb-6 text-xs font-semibold text-[#414141]/80">
                   <span>Custom range:</span>
                   <input
                     type="date"
-                    className="border border-slate-200 rounded-lg px-2 py-1"
+                    className="border border-[#DCDCDC] rounded-[12px] px-2 py-1 bg-[#FFFFFF]"
                     value={customStart}
                     onChange={(e) => setCustomStart(e.target.value)}
                   />
                   <span>to</span>
                   <input
                     type="date"
-                    className="border border-slate-200 rounded-lg px-2 py-1"
+                    className="border border-[#DCDCDC] rounded-[12px] px-2 py-1 bg-[#FFFFFF]"
                     value={customEnd}
                     onChange={(e) => setCustomEnd(e.target.value)}
                   />
@@ -389,26 +390,26 @@ export default function Dashboard() {
 
               <div className="h-80">
                 {trafficData.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-slate-400 font-medium">
+                  <div className="h-full flex items-center justify-center text-[#414141]/60 font-medium">
                     No visitor data for selected range.
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trafficData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontWeight: 600, fontSize: 12 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontWeight: 600, fontSize: 12 }} allowDecimals={false} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#DCDCDC" />
+                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#414141', fontWeight: 600, fontSize: 12 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#414141', fontWeight: 600, fontSize: 12 }} allowDecimals={false} />
                       <RechartsTooltip
-                        cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                        contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        cursor={{ stroke: '#78003F', strokeWidth: 1 }}
+                        contentStyle={{ borderRadius: '12px', border: '1px solid #DCDCDC', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                         formatter={(value) => [`${value}`, 'Visitors']}
                       />
                       <Line
                         type="monotone"
                         dataKey="count"
-                        stroke="#2563eb"
+                        stroke="#78003F"
                         strokeWidth={3}
-                        dot={{ r: 3, strokeWidth: 1, stroke: '#eff6ff', fill: '#2563eb' }}
+                        dot={{ r: 3, strokeWidth: 1, stroke: '#FFFFFF', fill: '#78003F' }}
                         activeDot={{ r: 5 }}
                       />
                     </LineChart>
@@ -418,36 +419,36 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-                <h3 className="text-lg font-extrabold text-slate-800 mb-1 flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-blue-500" />
+              <div className="lg:col-span-2 bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8">
+                <h3 className="text-lg font-extrabold text-[#414141] mb-1 flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-[#78003F]" />
                   Most Used Simulators (by hours)
                 </h3>
-                <p className="text-xs font-semibold text-slate-400 mb-6">
+                <p className="text-xs font-semibold text-[#414141]/60 mb-6">
                   Total hours of usage this month per simulator
                 </p>
                 <div className="h-80">
                   {simulatorUsage.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-slate-400 font-medium">No session data available yet.</div>
+                    <div className="h-full flex items-center justify-center text-[#414141]/60 font-medium">No session data available yet.</div>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={simulatorUsage} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontWeight: 600, fontSize: 12}} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#DCDCDC" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#414141', fontWeight: 600, fontSize: 12}} />
                         <YAxis 
                           axisLine={false} 
                           tickLine={false} 
-                          tick={{fill: '#64748b', fontWeight: 600, fontSize: 12}}
+                          tick={{fill: '#414141', fontWeight: 600, fontSize: 12}}
                           tickFormatter={(value) => value.toFixed(1)}
                         />
                         <RechartsTooltip 
-                          cursor={{fill: '#f8fafc'}} 
-                          contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
+                          cursor={{fill: '#DCDCDC33'}} 
+                          contentStyle={{borderRadius: '12px', border: '1px solid #DCDCDC', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
                           formatter={(value) => [`${value.toFixed(1)} h`, 'Hours']}
                         />
                         <Bar 
                           dataKey="hours" 
-                          fill="#2563eb" 
+                          fill="#78003F" 
                           radius={[6, 6, 0, 0]} 
                           barSize={40}
                         >
@@ -461,15 +462,15 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 flex flex-col">
-                <h3 className="text-lg font-extrabold text-slate-800 mb-8 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-purple-500" />
+              <div className="bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8 flex flex-col">
+                <h3 className="text-lg font-extrabold text-[#414141] mb-8 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-[#E64164]" />
                   Demographics (Monthly)
                 </h3>
                 
                 <div className="flex-1 min-h-[250px] flex flex-col justify-center">
                   {userBreakdown.every(v => v.value === 0) ? (
-                    <div className="flex items-center justify-center text-slate-400 font-medium h-full">No visitor data available.</div>
+                    <div className="flex items-center justify-center text-[#414141]/60 font-medium h-full">No visitor data available.</div>
                   ) : (
                     <>
                       <div className="h-56 relative">
@@ -486,27 +487,27 @@ export default function Dashboard() {
                               stroke="none"
                             >
                               {userBreakdown.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : index === 1 ? '#8b5cf6' : '#f59e0b'} />
+                                <Cell key={`cell-${index}`} fill={index === 0 ? '#78003F' : index === 1 ? '#E64164' : '#414141'} />
                               ))}
                             </Pie>
                             <RechartsTooltip 
-                              contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} 
+                              contentStyle={{borderRadius: '12px', border: '1px solid #DCDCDC', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} 
                             />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-3xl font-extrabold text-slate-800">
+                          <span className="text-3xl font-extrabold text-[#414141]">
                             {userBreakdown.reduce((a, b) => a + b.value, 0)}
                           </span>
-                          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Total</span>
+                          <span className="text-xs font-bold text-[#414141]/60 uppercase tracking-widest mt-1">Total</span>
                         </div>
                       </div>
                       
                       <div className="flex justify-center gap-6 mt-6">
                         {userBreakdown.map((entry, index) => (
                           <div key={entry.name} className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{backgroundColor: index === 0 ? '#3b82f6' : index === 1 ? '#8b5cf6' : '#f59e0b'}}></div>
-                            <span className="text-sm font-bold text-slate-600">{entry.name}</span>
+                            <div className="w-3 h-3 rounded-full" style={{backgroundColor: index === 0 ? '#78003F' : index === 1 ? '#E64164' : '#414141'}}></div>
+                            <span className="text-sm font-bold text-[#414141]/80">{entry.name}</span>
                           </div>
                         ))}
                       </div>
