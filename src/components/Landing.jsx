@@ -35,7 +35,7 @@ export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[#FFFFFF] text-[#414141]">
+    <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] via-[#DCDCDC]/20 to-[#FFFFFF] text-[#414141]">
       <header className="sticky top-0 z-30 bg-[#FFFFFF]/80 backdrop-blur border-b border-[#DCDCDC]/60">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -124,7 +124,7 @@ export default function Landing() {
         </section>
 
         {/* ── Feature 1: Attendance ── */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-[#FFFFFF] to-[#DCDCDC]/20 py-20">
+        <section className="relative overflow-hidden py-20">
           <div className="max-w-6xl mx-auto px-4 grid lg:grid-cols-2 gap-12 items-center">
             <div className="order-2 lg:order-1 space-y-5">
               <div className="text-xs font-extrabold tracking-widest uppercase text-[#78003F]">
@@ -167,7 +167,7 @@ export default function Landing() {
         </section>
 
         {/* ── Feature 2: Simulator tracking ── */}
-        <section className="relative overflow-hidden bg-[#FFFFFF] py-20">
+        <section className="relative overflow-hidden py-20">
           <div className="max-w-6xl mx-auto px-4 grid lg:grid-cols-2 gap-12 items-center">
             <div className="flex justify-center">
               <div className="relative">
@@ -211,7 +211,7 @@ export default function Landing() {
         </section>
 
         {/* ── Feature 3: Center operations ── */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-[#DCDCDC]/20 to-[#FFFFFF] py-20">
+        <section className="relative overflow-hidden py-20">
           <div className="max-w-6xl mx-auto px-4 grid lg:grid-cols-2 gap-12 items-center">
             <div className="order-2 lg:order-1 space-y-5">
               <div className="text-xs font-extrabold tracking-widest uppercase text-[#78003F]">
