@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Lock, Loader2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Lock, Loader2, Mail, UserPlus } from 'lucide-react';
+import appIcon from '../assets/app-icon.png';
 
 export default function Login() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
+    setGoogleLoading(true);
     setError(null);
     
     try {
@@ -22,35 +26,122 @@ export default function Login() {
       if (error) throw error;
     } catch (err) {
       setError(err.message);
-      setLoading(false);
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
+    setEmailLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (error) throw error;
+    } catch (err) {
+      setError(err.message);
+      setEmailLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-100 p-8">
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-lg shadow-blue-200">
-            <Lock className="text-white w-8 h-8" />
-          </div>
-          <h2 className="text-3xl font-extrabold text-slate-900">Admin Login</h2>
-          <p className="text-slate-500 mt-3 font-medium">Sign in to access the SimuFlow dashboard</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] via-[#DCDCDC]/20 to-[#FFFFFF] flex flex-col justify-center items-center p-4">
+      <div className="max-w-md w-full">
+        <button
+          onClick={() => navigate('/')}
+          className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#414141]/70 hover:text-[#414141] transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </button>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm font-semibold p-4 rounded-xl mb-6 border border-red-100">
-            {error}
+        <div className="bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-[#DCDCDC]/40 rounded-[16px] mx-auto flex items-center justify-center mb-5 shadow-[0_8px_20px_rgba(65,65,65,0.08)] overflow-hidden">
+              <img src={appIcon} alt="SimuFlow" className="w-full h-full object-cover" />
+            </div>
+            <h2 className="text-3xl font-extrabold text-[#414141]">Admin Login</h2>
+            <p className="text-[#414141]/70 mt-2 font-medium">
+              Sign in to access the SimuFlow dashboard
+            </p>
           </div>
-        )}
 
-        <div className="space-y-4">
-          <button 
+          {error && (
+            <div className="bg-[#E64164]/10 text-[#E64164] text-sm font-semibold p-4 rounded-[16px] mb-6 border border-[#E64164]/20">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleEmailLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-[#414141] mb-1.5">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-[#414141]/50 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  placeholder="admin@simuflow.net"
+                  className="w-full pl-10 pr-4 py-3 rounded-[16px] border border-transparent bg-[#DCDCDC]/40 text-[#414141] font-medium placeholder:text-[#414141]/40 focus:outline-none focus:ring-2 focus:ring-[#78003F] focus:bg-[#DCDCDC]/30 transition-all"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-[#414141] mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[#414141]/50 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  className="w-full pl-10 pr-4 py-3 rounded-[16px] border border-transparent bg-[#DCDCDC]/40 text-[#414141] font-medium placeholder:text-[#414141]/40 focus:outline-none focus:ring-2 focus:ring-[#78003F] focus:bg-[#DCDCDC]/30 transition-all"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={emailLoading || googleLoading}
+              className="w-full bg-gradient-to-br from-[#78003F] to-[#E64164] text-white font-bold py-3.5 rounded-full transition-all shadow-[0_8px_20px_rgba(65,65,65,0.08)] flex items-center justify-center gap-3 disabled:opacity-70 active:scale-[0.98]"
+            >
+              {emailLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign in with Email'
+              )}
+            </button>
+          </form>
+
+          <div className="my-4 flex items-center gap-3">
+            <div className="flex-1 h-px bg-[#DCDCDC]/80" />
+            <span className="text-xs font-semibold text-[#414141]/50 uppercase">or</span>
+            <div className="flex-1 h-px bg-[#DCDCDC]/80" />
+          </div>
+
+          <button
             onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 font-bold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-3 disabled:opacity-70"
+            disabled={googleLoading || emailLoading}
+            className="w-full bg-[#FFFFFF] border border-[#DCDCDC] hover:bg-[#DCDCDC]/20 text-[#414141] font-bold py-3.5 rounded-[16px] transition-all shadow-sm flex items-center justify-center gap-3 disabled:opacity-70"
           >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+            {googleLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin text-[#78003F]" />
             ) : (
               <>
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -76,16 +167,10 @@ export default function Login() {
             )}
           </button>
 
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-slate-200"></div>
-            <span className="text-xs font-semibold text-slate-400 uppercase">or</span>
-            <div className="flex-1 h-px bg-slate-200"></div>
-          </div>
-
           <button
             onClick={() => navigate('/guest/register')}
             id="guest-access-btn"
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-3"
+            className="mt-4 w-full bg-[#DCDCDC]/40 hover:bg-[#DCDCDC]/55 text-[#414141] font-bold py-3.5 rounded-[16px] transition-all shadow-sm flex items-center justify-center gap-3"
           >
             <UserPlus className="w-5 h-5" />
             Enter as Guest
