@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { getPublicAppUrl, supabase } from '../lib/supabase';
 import { ArrowLeft, Lock, Loader2, Mail, UserPlus } from 'lucide-react';
 import appIcon from '../assets/app-icon.png';
 
@@ -17,10 +17,12 @@ export default function Login() {
     setError(null);
     
     try {
+      const base = getPublicAppUrl() || window.location.origin
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          // Must match Supabase Auth → Redirect URLs (e.g. https://simuflow.net/admin)
+          redirectTo: `${base}/admin`,
         }
       });
       if (error) throw error;

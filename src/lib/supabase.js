@@ -19,4 +19,23 @@ const supabaseAnonKey =
     ? rawKey.trim()
     : DEFAULT_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'pkce',
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+})
+
+/** Base URL for OAuth redirects (custom domain vs Railway preview). */
+export function getPublicAppUrl() {
+  const configured = import.meta.env.VITE_PUBLIC_APP_URL
+  if (typeof configured === 'string' && configured.trim()) {
+    return configured.replace(/\/+$/, '')
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin
+  }
+  return ''
+}
