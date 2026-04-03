@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getPublicAppUrl, supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { ArrowLeft, Lock, Loader2, Mail, UserPlus } from 'lucide-react';
 import appIcon from '../assets/app-icon.png';
 
@@ -17,11 +17,10 @@ export default function Login() {
     setError(null);
     
     try {
-      const redirectTo = `${getPublicAppUrl()}/admin`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo,
+          redirectTo: window.location.origin,
         }
       });
       if (error) throw error;
