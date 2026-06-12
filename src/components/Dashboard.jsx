@@ -179,6 +179,14 @@ export default function Dashboard() {
         .or(`exit_time.is.null,exit_time.gte.${rangeStart.toISOString()}`);
       if (trafficErr) throw trafficErr;
 
+      // Guest traffic over time (anonymous web registrations)
+      const { data: trafficGuests, error: trafficGuestErr } = await supabase
+        .from('guests')
+        .select('created_at')
+        .gte('created_at', rangeStart.toISOString())
+        .lte('created_at', rangeEnd.toISOString());
+      if (trafficGuestErr) throw trafficGuestErr;
+
       // Bucket size for occupancy chart:
       // - Today / Yesterday / Custom  -> hours
       // - This Week / This Month / This Year -> days
@@ -215,6 +223,25 @@ export default function Dashboard() {
 
           const overlaps =
             sessionStart.isBefore(bucketEnd) &&
+            sessionEnd.isAfter(bucketStart);
+
+          if (overlaps) {
+            buckets[index].count += 1;
+          }
+        });
+      });
+
+      trafficGuests?.forEach(g => {
+        if (!g.created_at) return;
+        const guestTime = moment(g.created_at);
+        const sessionEnd = guestTime.clone().add(2, 'hours');
+
+        buckets.forEach((bucket, index) => {
+          const bucketStart = moment(bucket.key);
+          const bucketEnd = bucketStart.clone().add(1, bucketStep);
+
+          const overlaps =
+            guestTime.isBefore(bucketEnd) &&
             sessionEnd.isAfter(bucketStart);
 
           if (overlaps) {
