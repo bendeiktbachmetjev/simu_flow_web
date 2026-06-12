@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react';
 import Landing from './components/Landing';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfUse from './components/TermsOfUse';
+import ResetPassword from './components/ResetPassword';
 
 function AdminRoute() {
   const [session, setSession] = useState(null);
@@ -51,8 +52,10 @@ export default function App() {
         <Route path="/terms" element={<TermsOfUse />} />
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/guest/register" element={<GuestRegister />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<Landing />} />
       </Routes>
     </BrowserRouter>
   );
 }
+
