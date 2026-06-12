@@ -14,8 +14,21 @@ export default function ResetPassword() {
   
   const [hasSession, setHasSession] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [urlError, setUrlError] = useState(null);
 
   useEffect(() => {
+    // Check for error in URL hash or query parameters
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const errorDescription = hashParams.get('error_description') || queryParams.get('error_description');
+    const errorName = hashParams.get('error') || queryParams.get('error');
+
+    if (errorDescription) {
+      setUrlError(decodeURIComponent(errorDescription.replace(/\+/g, ' ')));
+    } else if (errorName) {
+      setUrlError(decodeURIComponent(errorName.replace(/\+/g, ' ')));
+    }
+
     // Check if we have an active session (which Supabase sets automatically from the recovery token/code)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
@@ -114,7 +127,7 @@ export default function ResetPassword() {
                 <AlertCircle className="w-16 h-16 text-[#E64164] stroke-[1.5]" />
               </div>
               <div className="bg-[#E64164]/10 text-[#E64164] text-sm font-semibold p-4 rounded-[16px] border border-[#E64164]/20">
-                Invalid or expired password reset link. Please request a new one from the login page.
+                {urlError || 'Invalid or expired password reset link. Please request a new one from the login page.'}
               </div>
               <button
                 onClick={() => navigate('/admin')}
