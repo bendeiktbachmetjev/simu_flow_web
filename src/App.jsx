@@ -52,6 +52,7 @@ export default function App() {
         <Route path="/terms" element={<TermsOfUse />} />
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/guest/register" element={<GuestRegister />} />
+        <Route path="/forgot-password" element={<Login initialView="forgot" />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<Landing />} />
       </Routes>

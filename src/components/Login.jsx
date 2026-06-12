@@ -4,7 +4,7 @@ import { getPublicAppUrl, supabase } from '../lib/supabase';
 import { ArrowLeft, Lock, Loader2, Mail, UserPlus } from 'lucide-react';
 import appIcon from '../assets/app-icon.png';
 
-export default function Login() {
+export default function Login({ initialView = 'login' }) {
   const navigate = useNavigate();
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
@@ -12,7 +12,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const [view, setView] = useState('login'); // 'login' or 'forgot'
+  const [view, setView] = useState(initialView); // 'login' or 'forgot'
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
 
