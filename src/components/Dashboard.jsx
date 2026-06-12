@@ -52,12 +52,14 @@ export default function Dashboard() {
 
       const now = moment();
       const startOfDay = now.clone().startOf('day').toISOString();
+      const endOfDay = now.clone().endOf('day').toISOString();
       const startOfMonth = now.clone().startOf('month').toISOString();
       
       const { count: todaysVisitors, error: todayErr } = await supabase
         .from('center_sessions')
         .select('*', { count: 'exact', head: true })
-        .gte('entry_time', startOfDay);
+        .gte('entry_time', startOfDay)
+        .lt('entry_time', endOfDay);
       if (todayErr) throw todayErr;
 
       const { count: monthVisitors, error: monthErr } = await supabase
@@ -70,7 +72,8 @@ export default function Dashboard() {
       const { count: todaysGuests, error: guestTodayErr } = await supabase
         .from('guests')
         .select('*', { count: 'exact', head: true })
-        .gte('created_at', startOfDay);
+        .gte('created_at', startOfDay)
+        .lt('created_at', endOfDay);
       if (guestTodayErr) throw guestTodayErr;
 
       const { count: monthGuests, error: guestMonthErr } = await supabase
