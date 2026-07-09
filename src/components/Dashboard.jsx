@@ -449,6 +449,9 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Daily simulator schedule timeline */}
+            <SimulatorTimeline />
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8">
                 <h3 className="text-lg font-extrabold text-[#414141] mb-1 flex items-center gap-2">
@@ -547,9 +550,6 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-
-            {/* Daily simulator schedule timeline */}
-            <SimulatorTimeline />
           </>
         )}
       </main>
