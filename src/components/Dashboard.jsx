@@ -7,6 +7,7 @@ import {
 import { Users, BookOpen, Activity, LayoutDashboard, LogOut } from 'lucide-react';
 import moment from 'moment';
 import StatCard from './StatCard';
+import SimulatorTimeline from './SimulatorTimeline';
 import appIcon from '../assets/app-icon.png';
 
 const COLORS = ['#78003F', '#E64164', '#414141', '#DCDCDC', '#8b5cf6'];
@@ -546,6 +547,9 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Daily simulator schedule timeline */}
+            <SimulatorTimeline />
           </>
         )}
       </main>
