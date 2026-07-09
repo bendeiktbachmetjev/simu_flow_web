@@ -320,6 +320,9 @@ export default function Dashboard() {
           </div>
         ) : (
           <>
+            {/* Daily simulator schedule timeline */}
+            <SimulatorTimeline />
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard 
                 title="Visitors Today" 
@@ -448,9 +451,6 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-
-            {/* Daily simulator schedule timeline */}
-            <SimulatorTimeline />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8">
