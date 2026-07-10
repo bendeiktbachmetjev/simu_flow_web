@@ -230,6 +230,15 @@ export default function SimulatorTimeline() {
               type="date"
               value={selectedDate}
               onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+              onClick={(e) => {
+                // Browsers only open the native calendar from the (invisible)
+                // picker icon; showPicker() opens it from anywhere in the pill.
+                try {
+                  e.currentTarget.showPicker?.();
+                } catch {
+                  /* non-gesture or unsupported: input stays focusable */
+                }
+              }}
               className="absolute inset-0 opacity-0 cursor-pointer"
               aria-label="Pick a day"
             />
