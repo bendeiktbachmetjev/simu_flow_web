@@ -31,6 +31,33 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // 'checking' | 'admin' | 'denied' — the dashboard is admin-only; any other
+  // signed-in account would silently see empty data through RLS otherwise.
+  const [access, setAccess] = useState('checking');
+  const [accountEmail, setAccountEmail] = useState('');
+
+  useEffect(() => {
+    const checkAdminAccess = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        setAccountEmail(user?.email || '');
+        if (!user) {
+          setAccess('denied');
+          return;
+        }
+        const { data: adminRow } = await supabase
+          .from('admins')
+          .select('id')
+          .eq('id', user.id)
+          .maybeSingle();
+        setAccess(adminRow ? 'admin' : 'denied');
+      } catch {
+        setAccess('denied');
+      }
+    };
+    checkAdminAccess();
+  }, []);
+
   useEffect(() => {
     fetchDashboardData();
   }, [timeRange, customStart, customEnd]);
@@ -275,6 +302,41 @@ export default function Dashboard() {
       setLoading(false);
     }
   };
+
+  if (access === 'checking') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FFFFFF]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-t-2 border-[#78003F] border-opacity-40"></div>
+      </div>
+    );
+  }
+
+  if (access === 'denied') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#FFFFFF] via-[#DCDCDC]/20 to-[#FFFFFF] p-4">
+        <div className="max-w-md w-full bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8 text-center">
+          <div className="w-16 h-16 bg-[#E64164]/10 rounded-[20px] mx-auto flex items-center justify-center mb-5">
+            <LogOut className="w-8 h-8 text-[#E64164]" />
+          </div>
+          <h2 className="text-2xl font-extrabold text-[#414141] mb-2">No administrator access</h2>
+          <p className="text-sm text-[#414141]/70 mb-1">
+            You are signed in as
+          </p>
+          <p className="text-sm font-bold text-[#414141] mb-4 break-all">{accountEmail || 'unknown account'}</p>
+          <p className="text-sm text-[#414141]/70 mb-6">
+            This account is not registered as an administrator, so the dashboard
+            cannot show any center data. Sign out and use your administrator account.
+          </p>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="w-full px-4 py-3 rounded-full bg-gradient-to-br from-[#78003F] to-[#E64164] text-white font-bold hover:opacity-90 transition-opacity"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] via-[#DCDCDC]/20 to-[#FFFFFF] text-[#414141] font-sans">
