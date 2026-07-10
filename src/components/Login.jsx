@@ -27,6 +27,9 @@ export default function Login({ initialView = 'login' }) {
         options: {
           // Must match Supabase Auth → Redirect URLs (e.g. https://simuflow.net/admin)
           redirectTo: `${base}/admin`,
+          // Always show Google's account chooser; otherwise Google silently
+          // reuses the last authorized account and the user can't switch.
+          queryParams: { prompt: 'select_account' },
         }
       });
       if (error) throw error;
