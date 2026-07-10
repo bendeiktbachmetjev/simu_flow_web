@@ -30,7 +30,7 @@ const timeToMinutes = (t) => {
 const formatTime = (minutes) =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
-// Assign overlapping reservations of one simulator to stacked lanes.
+// Assign overlapping reservations of one resource to stacked lanes.
 const assignLanes = (items) => {
   const laneEnds = [];
   const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
@@ -49,7 +49,7 @@ const assignLanes = (items) => {
 
 export default function SimulatorTimeline() {
   const [selectedDate, setSelectedDate] = useState(moment().format('YYYY-MM-DD'));
-  const [base, setBase] = useState(null); // { university, simulators, teacherMap, teacherIds }
+  const [base, setBase] = useState(null); // { university, simulators, rooms, teacherMap, teacherIds }
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -75,6 +75,11 @@ export default function SimulatorTimeline() {
         const { data: sims, error: simErr } = await simQuery;
         if (simErr) throw simErr;
 
+        let roomQuery = supabase.from('rooms').select('name');
+        if (university) roomQuery = roomQuery.eq('university', university);
+        const { data: rms, error: roomErr } = await roomQuery;
+        if (roomErr) throw roomErr;
+
         let teacherQuery = supabase.from('teachers').select('id, name, surname');
         if (university) teacherQuery = teacherQuery.eq('university', university);
         const { data: tchs, error: tchErr } = await teacherQuery;
@@ -93,6 +98,7 @@ export default function SimulatorTimeline() {
           simulators: [...(sims || [])].sort(
             (a, b) => (parseInt(a.number, 10) || 0) - (parseInt(b.number, 10) || 0)
           ),
+          rooms: [...(rms || [])].map(r => r.name).sort((a, b) => a.localeCompare(b)),
           teacherMap,
           teacherIds: (tchs || []).map(t => t.id),
         });
@@ -121,7 +127,7 @@ export default function SimulatorTimeline() {
 
         let query = supabase
           .from('teacher_schedules')
-          .select('id, teacher_id, start_time, end_time, simulators, notes, course, groups, needs_assistance')
+          .select('id, teacher_id, start_time, end_time, simulators, rooms, notes, course, groups, needs_assistance')
           .eq('session_date', selectedDate);
         if (base.university) query = query.in('teacher_id', base.teacherIds);
 
@@ -141,30 +147,54 @@ export default function SimulatorTimeline() {
   const timeline = useMemo(() => {
     if (!base) return null;
 
-    const reservations = [];
+    const simNameByNumber = Object.fromEntries(
+      base.simulators.map(s => [String(s.number), s.name])
+    );
+
+    const simReservations = [];
+    const roomReservations = [];
+    let scheduleCount = 0;
+
     schedules.forEach(s => {
       const startMin = timeToMinutes(s.start_time);
       const endMin = timeToMinutes(s.end_time);
       if (startMin === null || endMin === null || endMin <= startMin) return;
+      scheduleCount += 1;
+
+      const common = {
+        startMin,
+        endMin,
+        teacher: base.teacherMap[s.teacher_id]?.fullName || 'Unknown teacher',
+        gradient: base.teacherMap[s.teacher_id]?.gradient || PILL_GRADIENTS[0],
+        note: s.notes || '',
+        course: s.course || '',
+        groups: Array.isArray(s.groups) ? s.groups.filter(Boolean) : [],
+        needsAssistance: s.needs_assistance === true,
+        simNames: (s.simulators || []).map(n => simNameByNumber[String(n)] || `Simulator ${n}`),
+        roomNames: Array.isArray(s.rooms) ? s.rooms.filter(Boolean) : [],
+      };
+
       (s.simulators || []).forEach(simNumber => {
-        reservations.push({
-          id: `${s.id}-${simNumber}`,
+        simReservations.push({
+          ...common,
+          id: `${s.id}-sim-${simNumber}`,
           simNumber: String(simNumber),
-          startMin,
-          endMin,
-          teacher: base.teacherMap[s.teacher_id]?.fullName || 'Unknown teacher',
-          gradient: base.teacherMap[s.teacher_id]?.gradient || PILL_GRADIENTS[0],
-          note: s.notes || '',
-          course: s.course || '',
-          groups: Array.isArray(s.groups) ? s.groups.filter(Boolean) : [],
-          needsAssistance: s.needs_assistance === true,
+        });
+      });
+      (s.rooms || []).filter(Boolean).forEach(room => {
+        roomReservations.push({
+          ...common,
+          id: `${s.id}-room-${room}`,
+          room,
         });
       });
     });
 
+    const allReservations = [...simReservations, ...roomReservations];
+
     let openHour = DEFAULT_OPEN_HOUR;
     let closeHour = DEFAULT_CLOSE_HOUR;
-    reservations.forEach(r => {
+    allReservations.forEach(r => {
       openHour = Math.min(openHour, Math.floor(r.startMin / 60));
       closeHour = Math.max(closeHour, Math.ceil(r.endMin / 60));
     });
@@ -177,11 +207,36 @@ export default function SimulatorTimeline() {
     const hours = [];
     for (let h = openHour; h <= closeHour; h += hourStep) hours.push(h);
 
-    const rows = base.simulators.map(sim => {
-      const own = reservations.filter(r => r.simNumber === String(sim.number));
+    const simRows = base.simulators.map(sim => {
+      const own = simReservations.filter(r => r.simNumber === String(sim.number));
       const { items, laneCount } = assignLanes(own);
-      return { sim, items, laneCount, height: laneCount * LANE_HEIGHT + ROW_PADDING };
+      return {
+        key: `sim-${sim.id}`,
+        title: sim.name,
+        subtitle: `№ ${sim.number}`,
+        items,
+        laneCount,
+        height: laneCount * LANE_HEIGHT + ROW_PADDING,
+      };
     });
+
+    const roomRows = base.rooms.map(room => {
+      const own = roomReservations.filter(r => r.room === room);
+      const { items, laneCount } = assignLanes(own);
+      return {
+        key: `room-${room}`,
+        title: room,
+        subtitle: '',
+        items,
+        laneCount,
+        height: laneCount * LANE_HEIGHT + ROW_PADDING,
+      };
+    });
+
+    const sections = [
+      ...(simRows.length ? [{ label: 'Simulators', rows: simRows }] : []),
+      ...(roomRows.length ? [{ label: 'Rooms', rows: roomRows }] : []),
+    ];
 
     const now = moment();
     const isToday = selectedDate === now.format('YYYY-MM-DD');
@@ -191,13 +246,96 @@ export default function SimulatorTimeline() {
         ? toPercent(nowMin)
         : null;
 
-    return { rows, hours, toPercent, nowPercent, total: reservations.length };
+    return { sections, hours, toPercent, nowPercent, total: scheduleCount };
   }, [base, schedules, selectedDate]);
 
   const shiftDay = (days) =>
     setSelectedDate(moment(selectedDate).add(days, 'day').format('YYYY-MM-DD'));
 
   const isToday = selectedDate === moment().format('YYYY-MM-DD');
+
+  const renderRow = (row, rowIndex) => (
+    <div
+      key={row.key}
+      className={`flex hover:bg-[#DCDCDC]/10 transition-colors ${
+        rowIndex > 0 ? 'border-t border-[#DCDCDC]/40' : ''
+      }`}
+      style={{ height: row.height }}
+    >
+      <div
+        style={{ width: LABEL_COL_WIDTH }}
+        className="shrink-0 flex flex-col justify-center px-4 border-r border-[#DCDCDC]/40"
+      >
+        <span className="text-sm font-bold text-[#414141] truncate leading-tight">
+          {row.title}
+        </span>
+        {row.subtitle && (
+          <span className="text-[11px] font-semibold text-[#414141]/40 mt-0.5">
+            {row.subtitle}
+          </span>
+        )}
+      </div>
+
+      <div className="relative flex-1">
+        {timeline.hours
+          .filter(h => {
+            const pct = timeline.toPercent(h * 60);
+            return pct > 0.5 && pct < 99.5;
+          })
+          .map(h => (
+            <div
+              key={h}
+              className="absolute top-0 bottom-0 border-l border-[#DCDCDC]/40"
+              style={{ left: `${timeline.toPercent(h * 60)}%` }}
+            />
+          ))}
+
+        {timeline.nowPercent !== null && (
+          <div
+            className="absolute top-0 bottom-0 w-px bg-[#E64164] z-10"
+            style={{ left: `${timeline.nowPercent}%` }}
+          />
+        )}
+
+        {row.items.map(item => (
+          <div
+            key={item.id}
+            className="absolute z-[5] rounded-full flex items-center px-3.5 text-white shadow-[0_4px_12px_rgba(120,0,63,0.25)] cursor-default transition-transform duration-150 hover:scale-[1.02]"
+            style={{
+              left: `${timeline.toPercent(item.startMin)}%`,
+              width: `${timeline.toPercent(item.endMin) - timeline.toPercent(item.startMin)}%`,
+              top: ROW_PADDING / 2 + item.lane * LANE_HEIGHT + (LANE_HEIGHT - PILL_HEIGHT) / 2,
+              height: PILL_HEIGHT,
+              minWidth: 44,
+              backgroundImage: `linear-gradient(90deg, ${item.gradient[0]}, ${item.gradient[1]})`,
+            }}
+            onMouseEnter={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setHovered({
+                item,
+                x: rect.left + rect.width / 2,
+                top: rect.top,
+                bottom: rect.bottom,
+              });
+            }}
+            onMouseLeave={() => setHovered(null)}
+          >
+            {item.needsAssistance && (
+              <Headset className="w-3 h-3 shrink-0 mr-1" />
+            )}
+            <span className="text-[11px] font-bold truncate shrink-0 max-w-full">
+              {item.teacher}
+            </span>
+            {item.note && (
+              <span className="text-[11px] font-medium text-white/75 truncate ml-1.5">
+                · {item.note}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8">
@@ -208,7 +346,7 @@ export default function SimulatorTimeline() {
             Simulator Schedule
           </h3>
           <p className="text-xs font-semibold text-[#414141]/60 mt-1">
-            Reservations for every simulator in your center on the selected day
+            Reservations for every simulator and room in your center on the selected day
           </p>
         </div>
 
@@ -274,9 +412,9 @@ export default function SimulatorTimeline() {
         <div className="h-48 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-t-2 border-[#78003F] border-opacity-40"></div>
         </div>
-      ) : timeline.rows.length === 0 ? (
+      ) : timeline.sections.length === 0 ? (
         <div className="h-48 flex items-center justify-center text-[#414141]/60 font-medium">
-          No simulators found for your center.
+          No simulators or rooms found for your center.
         </div>
       ) : (
         <div className="overflow-x-auto pb-2 pr-5">
@@ -303,93 +441,21 @@ export default function SimulatorTimeline() {
               </div>
             </div>
 
-            {/* Simulator rows */}
-            <div className="rounded-[16px] border border-[#DCDCDC]/50 overflow-hidden bg-gradient-to-b from-[#FFFFFF] to-[#DCDCDC]/10">
-              {timeline.rows.map((row, rowIndex) => (
-                <div
-                  key={row.sim.id}
-                  className={`flex hover:bg-[#DCDCDC]/10 transition-colors ${
-                    rowIndex > 0 ? 'border-t border-[#DCDCDC]/40' : ''
-                  }`}
-                  style={{ height: row.height }}
-                >
-                  <div
-                    style={{ width: LABEL_COL_WIDTH }}
-                    className="shrink-0 flex flex-col justify-center px-4 border-r border-[#DCDCDC]/40"
-                  >
-                    <span className="text-sm font-bold text-[#414141] truncate leading-tight">
-                      {row.sim.name}
-                    </span>
-                    <span className="text-[11px] font-semibold text-[#414141]/40 mt-0.5">
-                      № {row.sim.number}
-                    </span>
-                  </div>
-
-                  <div className="relative flex-1">
-                    {timeline.hours
-                      .filter(h => {
-                        const pct = timeline.toPercent(h * 60);
-                        return pct > 0.5 && pct < 99.5;
-                      })
-                      .map(h => (
-                        <div
-                          key={h}
-                          className="absolute top-0 bottom-0 border-l border-[#DCDCDC]/40"
-                          style={{ left: `${timeline.toPercent(h * 60)}%` }}
-                        />
-                      ))}
-
-                    {timeline.nowPercent !== null && (
-                      <div
-                        className="absolute top-0 bottom-0 w-px bg-[#E64164] z-10"
-                        style={{ left: `${timeline.nowPercent}%` }}
-                      />
-                    )}
-
-                    {row.items.map(item => (
-                      <div
-                        key={item.id}
-                        className="absolute z-[5] rounded-full flex items-center px-3.5 text-white shadow-[0_4px_12px_rgba(120,0,63,0.25)] cursor-default transition-transform duration-150 hover:scale-[1.02]"
-                        style={{
-                          left: `${timeline.toPercent(item.startMin)}%`,
-                          width: `${timeline.toPercent(item.endMin) - timeline.toPercent(item.startMin)}%`,
-                          top: ROW_PADDING / 2 + item.lane * LANE_HEIGHT + (LANE_HEIGHT - PILL_HEIGHT) / 2,
-                          height: PILL_HEIGHT,
-                          minWidth: 44,
-                          backgroundImage: `linear-gradient(90deg, ${item.gradient[0]}, ${item.gradient[1]})`,
-                        }}
-                        onMouseEnter={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          setHovered({
-                            item,
-                            x: rect.left + rect.width / 2,
-                            top: rect.top,
-                            bottom: rect.bottom,
-                          });
-                        }}
-                        onMouseLeave={() => setHovered(null)}
-                      >
-                        {item.needsAssistance && (
-                          <Headset className="w-3 h-3 shrink-0 mr-1" />
-                        )}
-                        <span className="text-[11px] font-bold truncate shrink-0 max-w-full">
-                          {item.teacher}
-                        </span>
-                        {item.note && (
-                          <span className="text-[11px] font-medium text-white/75 truncate ml-1.5">
-                            · {item.note}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+            {/* Resource sections: simulators, then rooms */}
+            {timeline.sections.map((section, sectionIndex) => (
+              <div key={section.label} className={sectionIndex > 0 ? 'mt-5' : ''}>
+                <div className="text-[11px] font-extrabold tracking-[0.08em] uppercase text-[#414141]/45 mb-1.5 pl-1">
+                  {section.label}
                 </div>
-              ))}
-            </div>
+                <div className="rounded-[16px] border border-[#DCDCDC]/50 overflow-hidden bg-gradient-to-b from-[#FFFFFF] to-[#DCDCDC]/10">
+                  {section.rows.map((row, rowIndex) => renderRow(row, rowIndex))}
+                </div>
+              </div>
+            ))}
 
             {timeline.total === 0 && !loading && (
               <div className="text-center text-sm font-medium text-[#414141]/50 mt-4">
-                No reservations on {moment(selectedDate).format('MMMM D')} — all simulators are free.
+                No reservations on {moment(selectedDate).format('MMMM D')} — all simulators and rooms are free.
               </div>
             )}
           </div>
@@ -425,6 +491,16 @@ export default function SimulatorTimeline() {
                 {hovered.item.course && hovered.item.groups.length > 0 && ' · '}
                 {hovered.item.groups.length > 0 &&
                   `Group${hovered.item.groups.length > 1 ? 's' : ''} ${hovered.item.groups.join(', ')}`}
+              </div>
+            )}
+            {hovered.item.simNames.length > 0 && (
+              <div className="text-[11px] font-medium text-white/60 mt-0.5">
+                Simulators: {hovered.item.simNames.join(', ')}
+              </div>
+            )}
+            {hovered.item.roomNames.length > 0 && (
+              <div className="text-[11px] font-medium text-white/60 mt-0.5">
+                Rooms: {hovered.item.roomNames.join(', ')}
               </div>
             )}
             {hovered.item.needsAssistance && (
