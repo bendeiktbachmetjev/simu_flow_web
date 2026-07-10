@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Headset } from 'lucide-react';
 import moment from 'moment';
 
 // Center working hours shown by default; the window expands if a reservation falls outside it.
@@ -121,7 +121,7 @@ export default function SimulatorTimeline() {
 
         let query = supabase
           .from('teacher_schedules')
-          .select('id, teacher_id, start_time, end_time, simulators, notes, course, groups')
+          .select('id, teacher_id, start_time, end_time, simulators, notes, course, groups, needs_assistance')
           .eq('session_date', selectedDate);
         if (base.university) query = query.in('teacher_id', base.teacherIds);
 
@@ -157,6 +157,7 @@ export default function SimulatorTimeline() {
           note: s.notes || '',
           course: s.course || '',
           groups: Array.isArray(s.groups) ? s.groups.filter(Boolean) : [],
+          needsAssistance: s.needs_assistance === true,
         });
       });
     });
@@ -359,6 +360,9 @@ export default function SimulatorTimeline() {
                         }}
                         onMouseLeave={() => setHovered(null)}
                       >
+                        {item.needsAssistance && (
+                          <Headset className="w-3 h-3 shrink-0 mr-1" />
+                        )}
                         <span className="text-[11px] font-bold truncate shrink-0 max-w-full">
                           {item.teacher}
                         </span>
@@ -412,6 +416,12 @@ export default function SimulatorTimeline() {
                 {hovered.item.course && hovered.item.groups.length > 0 && ' · '}
                 {hovered.item.groups.length > 0 &&
                   `Group${hovered.item.groups.length > 1 ? 's' : ''} ${hovered.item.groups.join(', ')}`}
+              </div>
+            )}
+            {hovered.item.needsAssistance && (
+              <div className="text-[11px] font-bold text-[#FB7185] mt-1 flex items-center gap-1">
+                <Headset className="w-3 h-3 shrink-0" />
+                Simulation specialist needed
               </div>
             )}
             {hovered.item.note && (
