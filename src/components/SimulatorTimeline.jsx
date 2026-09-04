@@ -626,6 +626,8 @@ export default function SimulatorTimeline() {
                   title="Some events reserve no simulator or room"
                 />
               )}
+            </button>
+          )}
         </div>
       </div>
 
