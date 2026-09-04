@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { CalendarDays, ChevronLeft, ChevronRight, Headset } from 'lucide-react';
+import {
+  CalendarDays,
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  Headset,
+  Ticket,
+} from 'lucide-react';
 import moment from 'moment';
+import CreateEventModal from './CreateEventModal';
+
+const NO_UNIVERSITY_MESSAGE =
+  'Your admin profile has no university, so events cannot be created';
 
 // Center working hours shown by default; the window expands if a reservation falls outside it.
 const DEFAULT_OPEN_HOUR = 8;
@@ -49,11 +60,15 @@ const assignLanes = (items) => {
 
 export default function SimulatorTimeline() {
   const [selectedDate, setSelectedDate] = useState(moment().format('YYYY-MM-DD'));
-  const [base, setBase] = useState(null); // { university, simulators, rooms, teacherMap, teacherIds }
+  const [base, setBase] = useState(null); // { userId, university, simulators, rooms, teacherMap, teacherIds }
   const [schedules, setSchedules] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState(null);
   const [hovered, setHovered] = useState(null); // { item, x, top, bottom }
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     const loadBase = async () => {
@@ -94,6 +109,7 @@ export default function SimulatorTimeline() {
         });
 
         setBase({
+          userId: user?.id || null,
           university,
           simulators: [...(sims || [])].sort(
             (a, b) => (parseInt(a.number, 10) || 0) - (parseInt(b.number, 10) || 0)
@@ -112,37 +128,63 @@ export default function SimulatorTimeline() {
   }, []);
 
   useEffect(() => {
-    if (!base) return;
+    if (!base) return undefined;
+    let cancelled = false; // a slower response for a previous day must not overwrite the current one
+
     const loadSchedules = async () => {
       try {
         setLoading(true);
         setError(null);
         setHovered(null); // pill may unmount without firing mouseleave
 
+        const dayStart = moment(selectedDate, 'YYYY-MM-DD').startOf('day');
+        const dayEnd = dayStart.clone().add(1, 'day');
+
         // A scoped university with no teachers cannot have reservations.
+        let scheduleQuery;
         if (base.university && base.teacherIds.length === 0) {
-          setSchedules([]);
-          return;
+          scheduleQuery = Promise.resolve({ data: [], error: null });
+        } else {
+          scheduleQuery = supabase
+            .from('teacher_schedules')
+            .select('id, teacher_id, start_time, end_time, simulators, rooms, notes, course, groups, needs_assistance')
+            .eq('session_date', selectedDate);
+          if (base.university) scheduleQuery = scheduleQuery.in('teacher_id', base.teacherIds);
         }
 
-        let query = supabase
-          .from('teacher_schedules')
-          .select('id, teacher_id, start_time, end_time, simulators, rooms, notes, course, groups, needs_assistance')
-          .eq('session_date', selectedDate);
-        if (base.university) query = query.in('teacher_id', base.teacherIds);
+        let eventQuery = supabase
+          .from('event_codes')
+          .select('id, code, event_name, university, allowed_simulators, starts_at, ends_at')
+          .lt('starts_at', dayEnd.toISOString())
+          .gt('ends_at', dayStart.toISOString())
+          .order('starts_at', { ascending: true });
+        if (base.university) eventQuery = eventQuery.eq('university', base.university);
 
-        const { data, error: schedErr } = await query;
+        const [
+          { data: schedData, error: schedErr },
+          { data: eventData, error: eventErr },
+        ] = await Promise.all([scheduleQuery, eventQuery]);
+        if (cancelled) return;
+        // Keep whatever loaded; a failed source must not leave the previous day's pills on screen.
+        setSchedules(schedErr ? [] : schedData || []);
+        setEvents(eventErr ? [] : eventData || []);
         if (schedErr) throw schedErr;
-        setSchedules(data || []);
+        if (eventErr) throw eventErr;
+        setHasLoaded(true);
       } catch (err) {
+        if (cancelled) return;
         console.error(err);
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     loadSchedules();
-  }, [base, selectedDate]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [base, selectedDate, refreshKey]);
 
   const timeline = useMemo(() => {
     if (!base) return null;
@@ -154,6 +196,7 @@ export default function SimulatorTimeline() {
     const simReservations = [];
     const roomReservations = [];
     let scheduleCount = 0;
+    let eventCount = 0;
 
     schedules.forEach(s => {
       const startMin = timeToMinutes(s.start_time);
@@ -187,6 +230,44 @@ export default function SimulatorTimeline() {
           id: `${s.id}-room-${room}`,
           room,
         });
+      });
+    });
+
+    // Events are absolute instants; clip them to the selected local day.
+    const dayStart = moment(selectedDate, 'YYYY-MM-DD').startOf('day');
+    const dayEnd = dayStart.clone().add(1, 'day');
+    // Wall-clock minutes since local midnight, like the axis and the now-line.
+    // Elapsed-minute differences would drift by an hour on 23/25-hour DST days.
+    const wall = (m) => m.hours() * 60 + m.minutes();
+
+    events.forEach(ev => {
+      if (!ev.starts_at || !ev.ends_at) return;
+      const rawStart = moment(ev.starts_at);
+      const rawEnd = moment(ev.ends_at);
+      if (!rawStart.isBefore(dayEnd) || !rawEnd.isAfter(dayStart)) return; // outside this day
+      const startMin = rawStart.isBefore(dayStart) ? 0 : wall(rawStart);
+      const endMin = rawEnd.isSameOrAfter(dayEnd) ? 1440 : wall(rawEnd);
+      if (endMin <= startMin) return;
+
+      const numbers = Array.isArray(ev.allowed_simulators)
+        ? ev.allowed_simulators.map(n => String(n)).filter(Boolean)
+        : [];
+      if (numbers.length === 0) return; // occupies no row, so nothing to show or count
+
+      eventCount += 1;
+      const common = {
+        kind: 'event',
+        startMin,
+        endMin,
+        title: ev.event_name || ev.code,
+        code: ev.code,
+        simNames: numbers.map(n => simNameByNumber[n] || `Simulator ${n}`),
+        startsAt: ev.starts_at,
+        endsAt: ev.ends_at,
+        spansBeyondDay: rawStart.isBefore(dayStart) || rawEnd.isAfter(dayEnd),
+      };
+      numbers.forEach(n => {
+        simReservations.push({ ...common, id: `${ev.id}-sim-${n}`, simNumber: n });
       });
     });
 
@@ -246,8 +327,31 @@ export default function SimulatorTimeline() {
         ? toPercent(nowMin)
         : null;
 
-    return { sections, hours, toPercent, nowPercent, total: scheduleCount };
-  }, [base, schedules, selectedDate]);
+    const countParts = [];
+    if (scheduleCount > 0) {
+      countParts.push(`${scheduleCount} reservation${scheduleCount === 1 ? '' : 's'}`);
+    }
+    if (eventCount > 0) {
+      countParts.push(`${eventCount} event${eventCount === 1 ? '' : 's'}`);
+    }
+
+    return {
+      sections,
+      hours,
+      toPercent,
+      nowPercent,
+      total: scheduleCount + eventCount,
+      countLabel: countParts.join(' · '),
+    };
+  }, [base, schedules, events, selectedDate]);
+
+  const handleEventCreated = ({ starts_at }) => {
+    const startDay = moment(starts_at).format('YYYY-MM-DD');
+    if (startDay !== selectedDate) setSelectedDate(startDay);
+    setRefreshKey(k => k + 1);
+  };
+
+  const canCreate = Boolean(base?.university);
 
   const shiftDay = (days) =>
     setSelectedDate(moment(selectedDate).add(days, 'day').format('YYYY-MM-DD'));
@@ -297,42 +401,62 @@ export default function SimulatorTimeline() {
           />
         )}
 
-        {row.items.map(item => (
-          <div
-            key={item.id}
-            className="absolute z-[5] rounded-full flex items-center px-3.5 text-white shadow-[0_4px_12px_rgba(120,0,63,0.25)] cursor-default transition-transform duration-150 hover:scale-[1.02]"
-            style={{
-              left: `${timeline.toPercent(item.startMin)}%`,
-              width: `${timeline.toPercent(item.endMin) - timeline.toPercent(item.startMin)}%`,
-              top: ROW_PADDING / 2 + item.lane * LANE_HEIGHT + (LANE_HEIGHT - PILL_HEIGHT) / 2,
-              height: PILL_HEIGHT,
-              minWidth: 44,
-              backgroundImage: `linear-gradient(90deg, ${item.gradient[0]}, ${item.gradient[1]})`,
-            }}
-            onMouseEnter={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              setHovered({
-                item,
-                x: rect.left + rect.width / 2,
-                top: rect.top,
-                bottom: rect.bottom,
-              });
-            }}
-            onMouseLeave={() => setHovered(null)}
-          >
-            {item.needsAssistance && (
-              <Headset className="w-3 h-3 shrink-0 mr-1" />
-            )}
-            <span className="text-[11px] font-bold truncate shrink-0 max-w-full">
-              {item.teacher}
-            </span>
-            {item.note && (
-              <span className="text-[11px] font-medium text-white/75 truncate ml-1.5">
-                · {item.note}
-              </span>
-            )}
-          </div>
-        ))}
+        {row.items.map(item => {
+          const isEvent = item.kind === 'event';
+          return (
+            <div
+              key={item.id}
+              className={`absolute z-[5] rounded-full flex items-center px-3.5 cursor-default transition-transform duration-150 hover:scale-[1.02] ${
+                isEvent
+                  ? 'bg-[#78003F]/8 border-[1.5px] border-[#78003F] text-[#78003F] shadow-none'
+                  : 'text-white shadow-[0_4px_12px_rgba(120,0,63,0.25)]'
+              }`}
+              style={{
+                left: `${timeline.toPercent(item.startMin)}%`,
+                width: `${timeline.toPercent(item.endMin) - timeline.toPercent(item.startMin)}%`,
+                top: ROW_PADDING / 2 + item.lane * LANE_HEIGHT + (LANE_HEIGHT - PILL_HEIGHT) / 2,
+                height: PILL_HEIGHT,
+                minWidth: 44,
+                backgroundImage: isEvent
+                  ? undefined
+                  : `linear-gradient(90deg, ${item.gradient[0]}, ${item.gradient[1]})`,
+              }}
+              onMouseEnter={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setHovered({
+                  item,
+                  x: rect.left + rect.width / 2,
+                  top: rect.top,
+                  bottom: rect.bottom,
+                });
+              }}
+              onMouseLeave={() => setHovered(null)}
+            >
+              {isEvent ? (
+                <>
+                  <Ticket className="w-3 h-3 mr-1 shrink-0" />
+                  <span className="text-[11px] font-bold truncate shrink-0 max-w-full">
+                    {item.title}
+                  </span>
+                </>
+              ) : (
+                <>
+                  {item.needsAssistance && (
+                    <Headset className="w-3 h-3 shrink-0 mr-1" />
+                  )}
+                  <span className="text-[11px] font-bold truncate shrink-0 max-w-full">
+                    {item.teacher}
+                  </span>
+                  {item.note && (
+                    <span className="text-[11px] font-medium text-white/75 truncate ml-1.5">
+                      · {item.note}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -353,7 +477,7 @@ export default function SimulatorTimeline() {
         <div className="flex flex-wrap items-center gap-2">
           {timeline && timeline.total > 0 && (
             <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#DCDCDC]/30 text-[#414141]/70 mr-1">
-              {timeline.total} reservation{timeline.total === 1 ? '' : 's'}
+              {timeline.countLabel}
             </span>
           )}
           <button
@@ -395,20 +519,57 @@ export default function SimulatorTimeline() {
             onClick={() => setSelectedDate(moment().format('YYYY-MM-DD'))}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
               isToday
-                ? 'bg-gradient-to-br from-[#78003F] to-[#E64164] text-white border-transparent'
+                ? 'bg-[#78003F] text-white border-transparent'
                 : 'bg-[#FFFFFF] text-[#414141]/80 border-[#DCDCDC] hover:bg-[#DCDCDC]/20'
             }`}
           >
             Today
           </button>
+          <div className="hidden md:block w-px h-6 bg-[#DCDCDC]/80 mx-1" />
+          <span
+            className="inline-flex"
+            title={base && !canCreate ? NO_UNIVERSITY_MESSAGE : undefined}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setHovered(null);
+                setCreateOpen(true);
+              }}
+              disabled={!canCreate}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-br from-[#78003F] to-[#E64164] text-white shadow-[0_4px_12px_rgba(120,0,63,0.25)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CalendarPlus className="w-4 h-4" />
+              Create event
+            </button>
+          </span>
         </div>
       </div>
+
+      {base && !canCreate && (
+        <p className="text-[11px] font-medium text-[#414141]/60 -mt-3 mb-4 md:text-right">
+          {NO_UNIVERSITY_MESSAGE}
+        </p>
+      )}
+
+      {timeline && timeline.total > 0 && (
+        <div className="flex flex-wrap items-center gap-4 -mt-2 mb-4 text-[11px] font-semibold text-[#414141]/60">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-[#78003F] to-[#E64164]" />
+            Teacher class
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#78003F]/8 border-[1.5px] border-[#78003F]" />
+            Guest event
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="text-sm font-semibold text-[#E64164] mb-4">{error}</div>
       )}
 
-      {!timeline || (loading && schedules.length === 0) ? (
+      {!timeline || (loading && !hasLoaded) ? (
         <div className="h-48 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-t-2 border-[#78003F] border-opacity-40"></div>
         </div>
@@ -479,44 +640,81 @@ export default function SimulatorTimeline() {
           }}
         >
           <div className="bg-[#414141] text-white rounded-[12px] px-3.5 py-2.5 shadow-xl max-w-[280px] w-max">
-            <div className="text-xs font-bold whitespace-nowrap">
-              {formatTime(hovered.item.startMin)} – {formatTime(hovered.item.endMin)}
-            </div>
-            <div className="text-xs font-semibold text-white/90 mt-1 whitespace-nowrap">
-              {hovered.item.teacher}
-            </div>
-            {(hovered.item.course || hovered.item.groups.length > 0) && (
-              <div className="text-[11px] font-medium text-white/60 mt-0.5">
-                {hovered.item.course && `Course ${hovered.item.course}`}
-                {hovered.item.course && hovered.item.groups.length > 0 && ' · '}
-                {hovered.item.groups.length > 0 &&
-                  `Group${hovered.item.groups.length > 1 ? 's' : ''} ${hovered.item.groups.join(', ')}`}
-              </div>
-            )}
-            {hovered.item.simNames.length > 0 && (
-              <div className="text-[11px] font-medium text-white/60 mt-0.5">
-                Simulators: {hovered.item.simNames.join(', ')}
-              </div>
-            )}
-            {hovered.item.roomNames.length > 0 && (
-              <div className="text-[11px] font-medium text-white/60 mt-0.5">
-                Rooms: {hovered.item.roomNames.join(', ')}
-              </div>
-            )}
-            {hovered.item.needsAssistance && (
-              <div className="text-[11px] font-bold text-[#FB7185] mt-1 flex items-center gap-1">
-                <Headset className="w-3 h-3 shrink-0" />
-                Simulation specialist needed
-              </div>
-            )}
-            {hovered.item.note && (
-              <div className="text-[11px] font-medium text-white/75 mt-1 border-t border-white/10 pt-1.5">
-                {hovered.item.note}
-              </div>
+            {hovered.item.kind === 'event' ? (
+              <>
+                <div className="text-xs font-bold whitespace-nowrap">
+                  {hovered.item.spansBeyondDay
+                    ? `${moment(hovered.item.startsAt).format('D MMM HH:mm')} – ${moment(hovered.item.endsAt).format('D MMM HH:mm')}`
+                    : `${formatTime(hovered.item.startMin)} – ${formatTime(hovered.item.endMin)}`}
+                </div>
+                <div className="text-[11px] font-semibold text-white/70 mt-1 flex items-center gap-1">
+                  <Ticket className="w-3 h-3 shrink-0" />
+                  Guest event
+                </div>
+                <div className="text-xs font-bold text-white/90 mt-0.5">
+                  {hovered.item.title}
+                </div>
+                <div className="text-[11px] font-medium text-white/60 mt-0.5 font-mono tracking-wide">
+                  Code: {hovered.item.code}
+                </div>
+                {hovered.item.simNames.length > 0 && (
+                  <div className="text-[11px] font-medium text-white/60 mt-0.5">
+                    Simulators: {hovered.item.simNames.join(', ')}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="text-xs font-bold whitespace-nowrap">
+                  {formatTime(hovered.item.startMin)} – {formatTime(hovered.item.endMin)}
+                </div>
+                <div className="text-xs font-semibold text-white/90 mt-1 whitespace-nowrap">
+                  {hovered.item.teacher}
+                </div>
+                {(hovered.item.course || hovered.item.groups.length > 0) && (
+                  <div className="text-[11px] font-medium text-white/60 mt-0.5">
+                    {hovered.item.course && `Course ${hovered.item.course}`}
+                    {hovered.item.course && hovered.item.groups.length > 0 && ' · '}
+                    {hovered.item.groups.length > 0 &&
+                      `Group${hovered.item.groups.length > 1 ? 's' : ''} ${hovered.item.groups.join(', ')}`}
+                  </div>
+                )}
+                {hovered.item.simNames.length > 0 && (
+                  <div className="text-[11px] font-medium text-white/60 mt-0.5">
+                    Simulators: {hovered.item.simNames.join(', ')}
+                  </div>
+                )}
+                {hovered.item.roomNames.length > 0 && (
+                  <div className="text-[11px] font-medium text-white/60 mt-0.5">
+                    Rooms: {hovered.item.roomNames.join(', ')}
+                  </div>
+                )}
+                {hovered.item.needsAssistance && (
+                  <div className="text-[11px] font-bold text-[#FB7185] mt-1 flex items-center gap-1">
+                    <Headset className="w-3 h-3 shrink-0" />
+                    Simulation specialist needed
+                  </div>
+                )}
+                {hovered.item.note && (
+                  <div className="text-[11px] font-medium text-white/75 mt-1 border-t border-white/10 pt-1.5">
+                    {hovered.item.note}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
       )}
+
+      <CreateEventModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleEventCreated}
+        university={base?.university || null}
+        userId={base?.userId || null}
+        simulators={base?.simulators || []}
+        defaultDate={selectedDate}
+      />
     </div>
   );
 }
