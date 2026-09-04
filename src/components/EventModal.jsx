@@ -25,6 +25,10 @@ const DELETE_BLOCKED_BY_GUESTS_MESSAGE =
   'Guests have already registered with this code, so the event cannot be deleted. Clear its dates instead — that takes it off the calendar while the code keeps working.';
 const UPDATE_NOT_PERMITTED_MESSAGE =
   'Could not save — you may not have permission to edit this event.';
+// The DB trigger (migration 031) rejects overlapping reservations with this message prefix.
+const RESOURCE_BUSY_PREFIX = 'RESOURCE_BUSY';
+const AVAILABILITY_DEBOUNCE_MS = 300;
+const IDLE_AVAILABILITY = { status: 'idle', busy: {}, error: null };
 
 const INPUT_CLASS =
   'w-full px-4 py-3 rounded-[16px] border border-transparent bg-[#DCDCDC]/40 text-[#414141] font-medium placeholder:text-[#414141]/40 focus:outline-none focus:ring-2 focus:ring-[#78003F] focus:bg-[#DCDCDC]/30 transition-all';
@@ -82,6 +86,41 @@ const buildEditForm = (ev) => {
   };
 };
 
+// Keys of the busy map, matching `${resource_type}:${resource_key}` from the RPC.
+const simKey = (number) => `simulator:${number}`;
+const roomKey = (name) => `room:${name}`;
+
+// Local wall-clock window from the form, or null unless both ends are complete and end > start.
+const windowFromForm = (form) => {
+  if (!form.startDate || !form.startTime || !form.endDate || !form.endTime) return null;
+  const start = moment(`${form.startDate} ${form.startTime}`, 'YYYY-MM-DD HH:mm');
+  const end = moment(`${form.endDate} ${form.endTime}`, 'YYYY-MM-DD HH:mm');
+  if (!start.isValid() || !end.isValid() || !end.isAfter(start)) return null;
+  return { start, end };
+};
+
+// Same local day as the window start → "HH:mm", otherwise "D MMM HH:mm" (like the mobile app).
+const formatFreeFrom = (freeFrom, windowStart) =>
+  freeFrom.format(freeFrom.isSame(windowStart, 'day') ? 'HH:mm' : 'D MMM HH:mm');
+
+// One entry per resource: free from the latest busy_until (parsed into local time), labelled
+// with whoever holds that last reservation.
+const aggregateBusy = (rows) => {
+  const busy = {};
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const freeFrom = moment(row.busy_until);
+    if (!freeFrom.isValid()) return;
+    const key = `${row.resource_type}:${row.resource_key}`;
+    if (!busy[key] || freeFrom.isAfter(busy[key].freeFrom)) {
+      busy[key] = { freeFrom, label: row.label || '' };
+    }
+  });
+  return busy;
+};
+
+const busyMessage = (list) =>
+  `Busy at this time: ${list}. Choose another time, simulator or room.`;
+
 export default function EventModal({
   open,
   mode = 'create',
@@ -102,6 +141,8 @@ export default function EventModal({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState(null);
+  // Busy simulators/rooms for the current window: { status, busy: { [key]: { freeFrom, label } }, error }.
+  const [availability, setAvailability] = useState(IDLE_AVAILABILITY);
 
   const defaultDateRef = useRef(defaultDate);
   defaultDateRef.current = defaultDate;
@@ -113,8 +154,59 @@ export default function EventModal({
   // True only while a press that began on the backdrop itself is in flight, so a
   // text drag that starts inside the card and ends on the backdrop cannot close it.
   const backdropPressRef = useRef(false);
+  // Every check bumps the sequence; a response that comes back with a stale sequence is dropped.
+  const availabilitySeqRef = useRef(0);
+  // `from|to` (UTC ISO) of the window the current 'ready' busy map was computed for.
+  const readyWindowRef = useRef(null);
 
   const busy = saving || deleting;
+
+  // Asks the DB which simulators/rooms overlap the window. Resolves to the busy map, or null
+  // when the check did not run, failed, or was superseded by a newer one.
+  const runAvailabilityCheck = async (timeWindow) => {
+    availabilitySeqRef.current += 1;
+    const seq = availabilitySeqRef.current;
+    if (!timeWindow || !university) {
+      readyWindowRef.current = null;
+      setAvailability(IDLE_AVAILABILITY);
+      return null;
+    }
+    // Local wall-clock → UTC instant, exactly like the payload written on save.
+    const from = timeWindow.start.toISOString();
+    const to = timeWindow.end.toISOString();
+    setAvailability((a) => ({ ...a, status: 'checking', error: null }));
+    let result;
+    try {
+      result = await supabase.rpc('resource_availability', {
+        p_university: university,
+        p_from: from,
+        p_to: to,
+        // The record being edited must not conflict with itself.
+        p_exclude_event: isEdit ? (event?.id ?? null) : null,
+        p_exclude_schedule: null,
+      });
+    } catch (err) {
+      result = { data: null, error: err };
+    }
+    if (seq !== availabilitySeqRef.current) return null;
+    if (result.error) {
+      console.error(result.error);
+      readyWindowRef.current = null;
+      setAvailability({
+        status: 'error',
+        busy: {},
+        error: result.error?.message || 'Something went wrong',
+      });
+      return null;
+    }
+    const busyMap = aggregateBusy(result.data);
+    readyWindowRef.current = `${from}|${to}`;
+    setAvailability({ status: 'ready', busy: busyMap, error: null });
+    return busyMap;
+  };
+  // The debounced effect below calls through this ref so it always sees the latest props.
+  const runAvailabilityCheckRef = useRef(runAvailabilityCheck);
+  runAvailabilityCheckRef.current = runAvailabilityCheck;
 
   useEffect(() => {
     if (!open) return;
@@ -127,6 +219,9 @@ export default function EventModal({
     setSaving(false);
     setDeleting(false);
     setConfirmDelete(false);
+    availabilitySeqRef.current += 1;
+    readyWindowRef.current = null;
+    setAvailability(IDLE_AVAILABILITY);
   }, [open]);
 
   useEffect(() => {
@@ -146,6 +241,31 @@ export default function EventModal({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, busy, onClose]);
+
+  // Re-check busy resources whenever the window changes, debounced so editing a time does not
+  // fire an RPC per keystroke. The DB trigger stays the safety net if a check is missed.
+  useEffect(() => {
+    if (!open) {
+      availabilitySeqRef.current += 1;
+      return undefined;
+    }
+    const timeWindow = windowFromForm(form);
+    if (!timeWindow || !university) {
+      // Incomplete window: drop stale hints and any in-flight response so nothing stays greyed out.
+      availabilitySeqRef.current += 1;
+      readyWindowRef.current = null;
+      setAvailability(IDLE_AVAILABILITY);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) runAvailabilityCheckRef.current(timeWindow);
+    }, AVAILABILITY_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, form.startDate, form.startTime, form.endDate, form.endTime, university]);
 
   if (!open) return null;
 
@@ -197,6 +317,25 @@ export default function EventModal({
     if (!busy) onClose();
   };
 
+  // "№ 2 (free from 11:00), Simuliacinė 1 (free from 12:00)" for the selected busy resources.
+  const selectedConflicts = (busyMap, windowStart) => {
+    if (!busyMap || !windowStart) return [];
+    const parts = [];
+    [...form.selected]
+      .sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0))
+      .forEach((number) => {
+        const hit = busyMap[simKey(number)];
+        if (hit) parts.push(`№ ${number} (free from ${formatFreeFrom(hit.freeFrom, windowStart)})`);
+      });
+    [...form.selectedRooms]
+      .sort((a, b) => a.localeCompare(b))
+      .forEach((name) => {
+        const hit = busyMap[roomKey(name)];
+        if (hit) parts.push(`${name} (free from ${formatFreeFrom(hit.freeFrom, windowStart)})`);
+      });
+    return parts;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (busy) return;
@@ -215,6 +354,7 @@ export default function EventModal({
     const datesEmpty = !form.startDate && !form.startTime && !form.endDate && !form.endTime;
     let startsAt = null;
     let endsAt = null;
+    let timeWindow = null;
     if (isEdit && datesEmpty) {
       // Dates cleared on purpose: the event leaves the calendar, the code keeps working.
     } else {
@@ -232,6 +372,7 @@ export default function EventModal({
       // Local wall-clock → UTC instant; the timelines convert back to local when reading.
       startsAt = start.toISOString();
       endsAt = end.toISOString();
+      timeWindow = { start, end };
     }
     if (!isEdit && !university) return fail(`${NO_UNIVERSITY_MESSAGE}.`);
     if (isEdit && !event?.id) return fail('This event can no longer be found. Close and try again.');
@@ -245,6 +386,18 @@ export default function EventModal({
 
     setSaving(true);
     try {
+      // Busy resources block the save before the DB trigger has to. Reuse the hint map when it
+      // was computed for exactly this window; otherwise (debounce pending, still checking, or an
+      // earlier failure) ask the DB right now.
+      if (timeWindow) {
+        const busyMap =
+          availability.status === 'ready' && readyWindowRef.current === `${startsAt}|${endsAt}`
+            ? availability.busy
+            : await runAvailabilityCheck(timeWindow);
+        const conflicts = selectedConflicts(busyMap, timeWindow.start);
+        if (conflicts.length > 0) return fail(busyMessage(conflicts.join(', ')));
+      }
+
       if (isEdit) {
         const { data, error: updateError } = await supabase
           .from('event_codes')
@@ -302,11 +455,25 @@ export default function EventModal({
       }
     } catch (err) {
       console.error(err);
-      setError(
-        !isEdit && err?.code === '23505'
-          ? 'This code already exists — regenerate it.'
-          : err?.message || 'Something went wrong. Please try again.'
-      );
+      const message = typeof err?.message === 'string' ? err.message : '';
+      if (message.startsWith(RESOURCE_BUSY_PREFIX)) {
+        // The trigger caught an overlap the pre-check missed (a race, or a failed check): refresh
+        // the hints right away so the chips mark the conflict, then show the same banner.
+        const busyMap = timeWindow ? await runAvailabilityCheck(timeWindow) : null;
+        const conflicts = selectedConflicts(busyMap, timeWindow?.start);
+        const detail = message.slice(RESOURCE_BUSY_PREFIX.length).replace(/^:\s*/, '').trim();
+        setError(
+          busyMessage(
+            conflicts.length > 0 ? conflicts.join(', ') : detail || 'a selected simulator or room'
+          )
+        );
+      } else {
+        setError(
+          !isEdit && err?.code === '23505'
+            ? 'This code already exists — regenerate it.'
+            : err?.message || 'Something went wrong. Please try again.'
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -340,18 +507,47 @@ export default function EventModal({
     }
   };
 
-  const renderChip = (key, label, active, onToggle) => (
-    <button
-      key={key}
-      type="button"
-      onClick={onToggle}
-      disabled={busy}
-      aria-pressed={active}
-      className={`${CHIP_CLASS} ${active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS}`}
-    >
-      {label}
-    </button>
-  );
+  const timeWindow = windowFromForm(form);
+
+  // Busy + unselected: greyed out and inert. Busy + selected (prefilled in edit, or picked before
+  // the time was changed): stays checked with a red hint so the admin can uncheck it.
+  const renderChip = (key, resourceKey, label, active, onToggle) => {
+    const reservation = timeWindow ? availability.busy[resourceKey] : undefined;
+    const blocked = Boolean(reservation) && !active;
+    const flagged = Boolean(reservation) && active;
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={blocked ? undefined : onToggle}
+        disabled={busy || blocked}
+        aria-pressed={active}
+        aria-disabled={blocked || undefined}
+        title={reservation?.label ? `Busy: ${reservation.label}` : undefined}
+        className={`${CHIP_CLASS} ${active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS}${
+          blocked ? ' opacity-40 cursor-not-allowed' : ''
+        }${flagged ? ' ring-2 ring-[#E64164]/60' : ''}`}
+      >
+        {label}
+        {reservation && (
+          <>
+            {' '}
+            <span
+              className={
+                // On the gradient chip plain #E64164 text would vanish into the #E64164 edge,
+                // so the red hint sits on a small white pill.
+                flagged
+                  ? 'font-medium text-[#E64164] bg-[#FFFFFF] rounded-full px-1.5'
+                  : 'font-medium opacity-70'
+              }
+            >
+              (free from {formatFreeFrom(reservation.freeFrom, timeWindow.start)})
+            </span>
+          </>
+        )}
+      </button>
+    );
+  };
 
   const selectionHint = (() => {
     if (selectedCount === 0 && selectedRoomCount === 0) {
@@ -556,6 +752,7 @@ export default function EventModal({
                   const number = String(sim.number);
                   return renderChip(
                     number,
+                    simKey(number),
                     `№ ${number} · ${sim.name}`,
                     form.selected.includes(number),
                     () => toggleSim(number)
@@ -576,6 +773,7 @@ export default function EventModal({
                 {roomList.map((name) =>
                   renderChip(
                     name,
+                    roomKey(name),
                     name,
                     form.selectedRooms.includes(name),
                     () => toggleRoom(name)
@@ -584,6 +782,18 @@ export default function EventModal({
               </div>
             )}
             <p className="text-[11px] font-medium text-[#414141]/50 mt-2">{selectionHint}</p>
+            {availability.status === 'checking' && (
+              <p className="flex items-center gap-1 text-[11px] font-medium text-[#414141]/50 mt-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Checking availability…
+              </p>
+            )}
+            {availability.status === 'error' && (
+              <p className="text-[11px] font-medium text-[#E64164]/70 mt-1">
+                Could not check availability ({availability.error}). Saving will still reject busy
+                simulators and rooms.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 pt-1">
