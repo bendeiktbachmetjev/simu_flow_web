@@ -41,7 +41,7 @@ const EVENT_SELECT =
 const toggleChipClass = (pressed) =>
   `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
     pressed
-      ? 'bg-[#78003F] text-white border-transparent'
+      ? 'bg-[#78003F]/10 text-[#78003F] border-[#78003F]/40'
       : 'bg-[#FFFFFF] text-[#414141]/80 border-[#DCDCDC] hover:bg-[#DCDCDC]/20'
   }`;
 
@@ -471,7 +471,7 @@ export default function SimulatorTimeline() {
 
   return (
     <div className="bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_20px_rgba(65,65,65,0.08)] border border-[#DCDCDC]/60 p-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
         <div>
           <h3 className="text-lg font-extrabold text-[#414141] flex items-center gap-2">
             <CalendarDays className="w-5 h-5 text-[#78003F]" />
@@ -484,13 +484,32 @@ export default function SimulatorTimeline() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {active && activeTotal > 0 && (
-            <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#DCDCDC]/30 text-[#414141]/70 mr-1">
-              {active.countLabel}
-            </span>
-          )}
+        <span
+          className="inline-flex shrink-0"
+          title={base && !canCreate ? NO_UNIVERSITY_MESSAGE : undefined}
+        >
+          <button
+            type="button"
+            onClick={openCreate}
+            disabled={!canCreate}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold bg-gradient-to-br from-[#78003F] to-[#E64164] text-white shadow-[0_4px_12px_rgba(120,0,63,0.25)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CalendarPlus className="w-4 h-4" />
+            Create event
+          </button>
+        </span>
+      </div>
 
+      {base && !canCreate && (
+        <p className="text-[11px] font-medium text-[#414141]/60 -mt-2 mb-4 sm:text-right">
+          {NO_UNIVERSITY_MESSAGE}
+        </p>
+      )}
+
+      {/* Toolbar: navigation on the left, state chips on the right. Wraps as two
+          groups on narrow screens instead of scattering single buttons. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-5">
+        <div className="flex flex-wrap items-center gap-2">
           <div
             className="inline-flex p-0.5 rounded-full border border-[#DCDCDC] bg-[#FFFFFF]"
             role="group"
@@ -515,7 +534,6 @@ export default function SimulatorTimeline() {
               </button>
             ))}
           </div>
-
           <button
             type="button"
             onClick={() => shiftPeriod(-1)}
@@ -571,15 +589,18 @@ export default function SimulatorTimeline() {
           <button
             type="button"
             onClick={goToToday}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-              (viewMode === 'week' ? isThisWeek : isToday)
-                ? 'bg-[#78003F] text-white border-transparent'
-                : 'bg-[#FFFFFF] text-[#414141]/80 border-[#DCDCDC] hover:bg-[#DCDCDC]/20'
-            }`}
+            className={toggleChipClass(viewMode === 'week' ? isThisWeek : isToday)}
           >
             {viewMode === 'week' ? 'This week' : 'Today'}
           </button>
+        </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          {active && activeTotal > 0 && (
+            <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#DCDCDC]/30 text-[#414141]/70">
+              {active.countLabel}
+            </span>
+          )}
           <button
             type="button"
             onClick={toggleEmptyRooms}
@@ -590,7 +611,6 @@ export default function SimulatorTimeline() {
             {showEmptyRooms ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             Empty rooms
           </button>
-
           {eventsCount > 0 && (
             <button
               type="button"
@@ -606,35 +626,11 @@ export default function SimulatorTimeline() {
                   title="Some events reserve no simulator or room"
                 />
               )}
-            </button>
-          )}
-
-          <div className="hidden md:block w-px h-6 bg-[#DCDCDC]/80 mx-1" />
-          <span
-            className="inline-flex"
-            title={base && !canCreate ? NO_UNIVERSITY_MESSAGE : undefined}
-          >
-            <button
-              type="button"
-              onClick={openCreate}
-              disabled={!canCreate}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-br from-[#78003F] to-[#E64164] text-white shadow-[0_4px_12px_rgba(120,0,63,0.25)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <CalendarPlus className="w-4 h-4" />
-              Create event
-            </button>
-          </span>
         </div>
       </div>
 
-      {base && !canCreate && (
-        <p className="text-[11px] font-medium text-[#414141]/60 -mt-3 mb-4 md:text-right">
-          {NO_UNIVERSITY_MESSAGE}
-        </p>
-      )}
-
       {active && activeTotal > 0 && (
-        <div className="flex flex-wrap items-center gap-4 -mt-2 mb-4 text-[11px] font-semibold text-[#414141]/60">
+        <div className="flex flex-wrap items-center gap-4 -mt-1 mb-4 text-[11px] font-semibold text-[#414141]/60">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-[#78003F] to-[#E64164]" />
             Teacher class
