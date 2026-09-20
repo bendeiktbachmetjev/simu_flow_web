@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "serve dist -s"
+    "start": "serve dist -s",
+    "test": "TZ=Europe/Vilnius node --test \"src/admin/**/*.test.mjs\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
