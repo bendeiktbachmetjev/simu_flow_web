@@ -1,4 +1,4 @@
-// Pure helpers and constants for the simulator timeline (day + week views).
+// Pure helpers and constants for the simulator timeline (day, week + month views).
 // No React here: everything is plain data in, plain data out, so the container
 // (SimulatorTimeline.jsx) and the presentational grids can share one model.
 import moment from 'moment';
@@ -89,6 +89,29 @@ export const formatWeekLabel = (weekStart) => {
   return `${start.format('D MMM YYYY')} – ${end.format('D MMM YYYY')}`;
 };
 
+// Month grid containing dateStr: Monday of the ISO week holding the 1st through
+// Sunday of the ISO week holding the last day (28, 35 or 42 days), as Mon–Sun rows.
+// Calendar-day arithmetic only, like getWeek.
+export const getMonthGrid = (dateStr) => {
+  const monthStart = moment(dateStr, 'YYYY-MM-DD').startOf('month');
+  const gridStart = monthStart.clone().startOf('isoWeek');
+  const gridEnd = monthStart.clone().endOf('month').startOf('isoWeek').add(7, 'day'); // exclusive
+  const days = [];
+  const cursor = gridStart.clone();
+  while (cursor.isBefore(gridEnd)) {
+    days.push(cursor.format('YYYY-MM-DD'));
+    cursor.add(1, 'day');
+  }
+  const weeks = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  return {
+    monthStart,
+    monthKey: monthStart.format('YYYY-MM'),
+    days,
+    weeks,
+  };
+};
+
 // Short time text for a chip whose range is already clipped to one day.
 export const chipTimeLabel = (item) => {
   const { startMin, endMin } = item;
@@ -103,6 +126,20 @@ export const chipTimeLabel = (item) => {
 const wallMinutes = (m) => m.hours() * 60 + m.minutes();
 
 const dateLabelOf = (dateStr) => moment(dateStr, 'YYYY-MM-DD').format('ddd D MMM');
+
+// Teachers attached to an event (event_codes.teacher_ids), resolved through the base
+// teacher map. An id that no longer resolves (teacher removed) is skipped rather than
+// shown as "Unknown": the event is still valid, it just has one leader fewer.
+const eventTeachers = (base, ev) => {
+  const teacherMap = base?.teacherMap || {};
+  const infos = (Array.isArray(ev?.teacher_ids) ? ev.teacher_ids : [])
+    .map(id => teacherMap[id])
+    .filter(Boolean);
+  return {
+    teacherNames: infos.map(t => t.fullName),
+    teacherShortNames: infos.map(t => t.shortName),
+  };
+};
 
 // Events are absolute instants; clip one to a local calendar day.
 // Returns null when the event has no dates or does not touch that day.
@@ -135,16 +172,26 @@ const emptyReservations = () => ({
   unplacedEvents: [],
 });
 
-// One reservation item per (reservation, resource) for a single local day.
-// Item shape is shared by the day view, the week grid and the tooltip:
-// { id, kind, date, dateLabel, startMin, endMin, timeLabel, label, simNames, roomNames,
+const byStartEndLabel = (a, b) =>
+  a.startMin - b.startMin ||
+  a.endMin - b.endMin ||
+  String(a.label || '').localeCompare(String(b.label || ''));
+
+// One entry per class and per event touching a single local day, in input order
+// (schedules first, then events). Entry shape is shared by the month cells and, fanned
+// out per resource, by the day view, the week grid and the tooltip:
+// { id, kind, date, dateLabel, startMin, endMin, durationMin, timeLabel, label, placed,
+//   simNumbers, simNames, roomNames,
 //   class: scheduleId, teacher, teacherShort, gradient, note, course, groups, needsAssistance
-//   event: eventId, raw, title, code, startsAt, endsAt, spansBeyondDay
-//   placement: simNumber | room; lane is added by assignLanes }
-export const buildDayReservations = ({ base, schedules = [], events = [], date }) => {
-  const result = emptyReservations();
-  if (!base || !date) return result;
-  const { simReservations, roomReservations, scheduleIds, eventIds, unplacedEvents } = result;
+//   event: eventId, raw, title, code, startsAt, endsAt, spansBeyondDay, teacherNames, teacherShortNames }
+// Input order matters: assignLanes sorts stably, so two items with the same start and
+// end keep their input order for lanes. buildDayReservations fans out in this order;
+// buildDayEntries sorts a copy for display.
+const collectDayEntries = ({ base, schedules = [], events = [], date }) => {
+  const entries = [];
+  const scheduleIds = new Set();
+  const eventIds = new Set();
+  if (!base || !date) return { entries, scheduleIds, eventIds };
 
   const simNameByNumber = Object.fromEntries(
     base.simulators.map(s => [String(s.number), s.name])
@@ -161,14 +208,19 @@ export const buildDayReservations = ({ base, schedules = [], events = [], date }
     const teacherInfo = base.teacherMap[s.teacher_id];
     const teacher = teacherInfo?.fullName || 'Unknown teacher';
     const teacherShort = teacherInfo?.shortName || teacher;
-    const common = {
+    const simNumbers = (s.simulators || []).map(n => String(n));
+    const roomNames = Array.isArray(s.rooms) ? s.rooms.filter(Boolean) : [];
+    entries.push({
+      id: `${s.id}-${date}`,
       kind: 'class',
       date,
       dateLabel,
       startMin,
       endMin,
+      durationMin: endMin - startMin,
       timeLabel: chipTimeLabel({ startMin, endMin }),
       label: teacherShort,
+      placed: simNumbers.length > 0 || roomNames.length > 0,
       scheduleId: s.id,
       teacher,
       teacherShort,
@@ -177,23 +229,9 @@ export const buildDayReservations = ({ base, schedules = [], events = [], date }
       course: s.course || '',
       groups: Array.isArray(s.groups) ? s.groups.filter(Boolean) : [],
       needsAssistance: s.needs_assistance === true,
-      simNames: (s.simulators || []).map(n => simNameByNumber[String(n)] || `Simulator ${n}`),
-      roomNames: Array.isArray(s.rooms) ? s.rooms.filter(Boolean) : [],
-    };
-
-    (s.simulators || []).forEach(simNumber => {
-      simReservations.push({
-        ...common,
-        id: `${s.id}-${date}-sim-${simNumber}`,
-        simNumber: String(simNumber),
-      });
-    });
-    common.roomNames.forEach(room => {
-      roomReservations.push({
-        ...common,
-        id: `${s.id}-${date}-room-${room}`,
-        room,
-      });
+      simNumbers,
+      simNames: simNumbers.map(n => simNameByNumber[n] || `Simulator ${n}`),
+      roomNames,
     });
   });
 
@@ -202,25 +240,25 @@ export const buildDayReservations = ({ base, schedules = [], events = [], date }
     if (!clip) return;
     eventIds.add(ev.id); // counted whether or not it occupies a row
 
-    const numbers = Array.isArray(ev.allowed_simulators)
+    const simNumbers = Array.isArray(ev.allowed_simulators)
       ? ev.allowed_simulators.map(n => String(n)).filter(Boolean)
       : [];
     const roomNames = Array.isArray(ev.rooms) ? ev.rooms.filter(Boolean) : [];
-    if (numbers.length === 0 && roomNames.length === 0) {
-      unplacedEvents.push(ev); // reachable from the Events strip only
-      return;
-    }
-
     const title = ev.event_name || ev.code;
-    const common = {
+    const { teacherNames, teacherShortNames } = eventTeachers(base, ev);
+    entries.push({
+      id: `${ev.id}-${date}`,
       kind: 'event',
       date,
       dateLabel,
       startMin: clip.startMin,
       endMin: clip.endMin,
+      durationMin: clip.endMin - clip.startMin,
       timeLabel: chipTimeLabel(clip),
       label: title,
-      simNames: numbers.map(n => simNameByNumber[n] || `Simulator ${n}`),
+      placed: simNumbers.length > 0 || roomNames.length > 0, // false: no resource row, Events strip and month cell only
+      simNumbers,
+      simNames: simNumbers.map(n => simNameByNumber[n] || `Simulator ${n}`),
       roomNames,
       eventId: ev.id,
       raw: ev, // un-clipped row: the edit modal must prefill from real starts_at/ends_at
@@ -229,12 +267,42 @@ export const buildDayReservations = ({ base, schedules = [], events = [], date }
       startsAt: ev.starts_at,
       endsAt: ev.ends_at,
       spansBeyondDay: clip.spansBeyondDay,
-    };
-    numbers.forEach(n => {
-      simReservations.push({ ...common, id: `${ev.id}-${date}-sim-${n}`, simNumber: n });
+      teacherNames,
+      teacherShortNames,
     });
-    roomNames.forEach(room => {
-      roomReservations.push({ ...common, id: `${ev.id}-${date}-room-${room}`, room });
+  });
+
+  return { entries, scheduleIds, eventIds };
+};
+
+// Public, display-ordered variant: one entry per class / event for `date`,
+// sorted by start, end, label (the month cells list these directly).
+export const buildDayEntries = (args) =>
+  [...collectDayEntries(args).entries].sort(byStartEndLabel);
+
+// One reservation item per (reservation, resource) for a single local day:
+// every placed entry above, copied once per simulator and once per room with
+// `id` re-keyed to the resource and `simNumber` | `room` added; lane is added by assignLanes.
+export const buildDayReservations = ({ base, schedules = [], events = [], date }) => {
+  const result = emptyReservations();
+  if (!base || !date) return result;
+  const { simReservations, roomReservations, unplacedEvents } = result;
+
+  const { entries, scheduleIds, eventIds } = collectDayEntries({ base, schedules, events, date });
+  result.scheduleIds = scheduleIds;
+  result.eventIds = eventIds;
+
+  entries.forEach(entry => {
+    if (entry.kind === 'event' && !entry.placed) {
+      unplacedEvents.push(entry.raw); // reachable from the Events strip only
+      return;
+    }
+    const sourceId = entry.kind === 'class' ? entry.scheduleId : entry.eventId;
+    entry.simNumbers.forEach(n => {
+      simReservations.push({ ...entry, id: `${sourceId}-${date}-sim-${n}`, simNumber: n });
+    });
+    entry.roomNames.forEach(room => {
+      roomReservations.push({ ...entry, id: `${sourceId}-${date}-room-${room}`, room });
     });
   });
 
@@ -343,11 +411,6 @@ export const buildDayTimeline = ({ base, schedules = [], events = [], date, show
     countLabel: countLabelFor(scheduleCount, eventCount),
   };
 };
-
-const byStartEndLabel = (a, b) =>
-  a.startMin - b.startMin ||
-  a.endMin - b.endMin ||
-  String(a.label || '').localeCompare(String(b.label || ''));
 
 // Week view: resources as rows, Mon–Sun as columns, chips stacked per cell.
 export const buildWeekGrid = ({
@@ -458,13 +521,83 @@ export const buildWeekGrid = ({
   };
 };
 
+// Month view: Mon–Sun rows of day cells, each listing its own entries with a load
+// figure, so a whole month's plan (and how busy the center is) reads at a glance.
+// Counts, the busiest day and the bar scale come from the selected month's own days;
+// the padding days of the neighbouring months are shown but not counted.
+export const buildMonthGrid = ({ base, schedules = [], events = [], days, selectedDate }) => {
+  if (!base) return null;
+  const gridDays = Array.isArray(days) && days.length > 0 && days.length % 7 === 0
+    ? days
+    : getMonthGrid(selectedDate).days;
+  const monthKey = moment(selectedDate, 'YYYY-MM-DD').format('YYYY-MM');
+  const today = moment().format('YYYY-MM-DD');
+
+  const allScheduleIds = new Set();
+  const allEventIds = new Set();
+  let busiestDate = null;
+  let maxBookedMinutes = 0;
+
+  const cells = gridDays.map(date => {
+    const m = moment(date, 'YYYY-MM-DD');
+    const inMonth = m.format('YYYY-MM') === monthKey;
+    const { entries, scheduleIds, eventIds } = collectDayEntries({ base, schedules, events, date });
+    entries.sort(byStartEndLabel);
+    // Planned minutes that day, one share per class / event (an unplaced event still happens).
+    const bookedMinutes = entries.reduce((sum, e) => sum + e.durationMin, 0);
+    if (inMonth) {
+      scheduleIds.forEach(id => allScheduleIds.add(id));
+      eventIds.forEach(id => allEventIds.add(id));
+      if (bookedMinutes > maxBookedMinutes) {
+        maxBookedMinutes = bookedMinutes;
+        busiestDate = date;
+      }
+    }
+    return {
+      date,
+      dayNum: m.format('D'),
+      inMonth,
+      isToday: date === today,
+      isAnchor: date === selectedDate,
+      isWeekend: m.isoWeekday() >= 6,
+      entries,
+      classCount: scheduleIds.size,
+      eventCount: eventIds.size,
+      bookedMinutes,
+    };
+  });
+
+  // An 8-hour day is a full bar; a busier month stretches the scale to its busiest day.
+  const fullDay = Math.max(maxBookedMinutes, 480);
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    const row = cells.slice(i, i + 7).map(cell => ({
+      ...cell,
+      loadPercent: Math.min(100, (cell.bookedMinutes / fullDay) * 100),
+    }));
+    weeks.push({ key: row[0].date, days: row });
+  }
+
+  const scheduleCount = allScheduleIds.size;
+  const eventCount = allEventIds.size;
+
+  return {
+    weeks,
+    total: scheduleCount + eventCount,
+    countLabel: countLabelFor(scheduleCount, eventCount),
+    busiestDate,
+    maxBookedMinutes,
+  };
+};
+
 // Flat, sorted list of the dated events in the visible period (for the Events strip).
-// mode 'day': events touching `date`; mode 'week': every fetched event of the week.
-export const buildPeriodEvents = ({ events = [], mode = 'day', date, days }) => {
-  const weekStart = mode === 'week' && Array.isArray(days) && days.length > 0
-    ? moment(days[0], 'YYYY-MM-DD').startOf('day')
-    : null;
-  const weekEnd = weekStart
+// mode 'day': events touching `date`; mode 'week' | 'month': every fetched event of the
+// period bounded by `days`.
+// `base` is optional: without it teacher ids cannot be resolved, so the name lists stay empty.
+export const buildPeriodEvents = ({ events = [], mode = 'day', date, days, base = null }) => {
+  const bounded = (mode === 'week' || mode === 'month') && Array.isArray(days) && days.length > 0;
+  const periodStart = bounded ? moment(days[0], 'YYYY-MM-DD').startOf('day') : null;
+  const periodEnd = periodStart
     ? moment(days[days.length - 1], 'YYYY-MM-DD').startOf('day').add(1, 'day')
     : null;
 
@@ -476,8 +609,8 @@ export const buildPeriodEvents = ({ events = [], mode = 'day', date, days }) => 
 
     if (mode === 'day') {
       if (!clipEventToDay(ev, date)) return;
-    } else if (weekStart && (!start.isBefore(weekEnd) || !end.isAfter(weekStart))) {
-      return; // outside the fetched week (defensive; the query already scopes it)
+    } else if (periodStart && (!start.isBefore(periodEnd) || !end.isAfter(periodStart))) {
+      return; // outside the fetched period (defensive; the query already scopes it)
     }
 
     const sameDay = start.isSame(end, 'day');
@@ -485,6 +618,10 @@ export const buildPeriodEvents = ({ events = [], mode = 'day', date, days }) => 
     if (mode === 'day') {
       timeLabel = sameDay
         ? `${start.format('HH:mm')} – ${end.format('HH:mm')}`
+        : `${start.format('D MMM HH:mm')} – ${end.format('D MMM HH:mm')}`;
+    } else if (mode === 'month') {
+      timeLabel = sameDay
+        ? `${start.format('D MMM')} · ${start.format('HH:mm')} – ${end.format('HH:mm')}`
         : `${start.format('D MMM HH:mm')} – ${end.format('D MMM HH:mm')}`;
     } else {
       timeLabel = sameDay
@@ -496,6 +633,7 @@ export const buildPeriodEvents = ({ events = [], mode = 'day', date, days }) => 
       ? ev.allowed_simulators.map(n => String(n)).filter(Boolean)
       : [];
     const rooms = Array.isArray(ev.rooms) ? ev.rooms.filter(Boolean) : [];
+    const { teacherNames, teacherShortNames } = eventTeachers(base, ev);
 
     list.push({
       id: ev.id,
@@ -505,6 +643,8 @@ export const buildPeriodEvents = ({ events = [], mode = 'day', date, days }) => 
       endsAt: ev.ends_at,
       timeLabel,
       placed: numbers.length > 0 || rooms.length > 0,
+      teacherNames,
+      teacherShortNames,
       raw: ev,
     });
   });

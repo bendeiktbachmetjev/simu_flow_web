@@ -13,6 +13,7 @@ import {
 import moment from 'moment';
 import EventModal from './EventModal';
 import WeekGrid from './timeline/WeekGrid';
+import MonthGrid from './timeline/MonthGrid';
 import EventsStrip from './timeline/EventsStrip';
 import {
   LABEL_COL_WIDTH,
@@ -23,9 +24,11 @@ import {
   formatTime,
   shortName,
   getWeek,
+  getMonthGrid,
   formatWeekLabel,
   buildDayTimeline,
   buildWeekGrid,
+  buildMonthGrid,
   buildPeriodEvents,
 } from './timeline/model';
 
@@ -35,7 +38,7 @@ const NO_UNIVERSITY_MESSAGE =
 const VIEW_STORAGE_KEY = 'simuflow.timeline.view';
 
 const EVENT_SELECT =
-  'id, code, event_name, university, allowed_simulators, rooms, starts_at, ends_at';
+  'id, code, event_name, university, allowed_simulators, rooms, starts_at, ends_at, teacher_ids';
 
 // Header toggle chips (Empty rooms, Events) share one look.
 const toggleChipClass = (pressed) =>
@@ -45,23 +48,38 @@ const toggleChipClass = (pressed) =>
       : 'bg-[#FFFFFF] text-[#414141]/80 border-[#DCDCDC] hover:bg-[#DCDCDC]/20'
   }`;
 
+const VIEW_MODES = ['day', 'week', 'month'];
+
 const readStoredViewMode = () => {
   try {
-    return window.localStorage.getItem(VIEW_STORAGE_KEY) === 'week' ? 'week' : 'day';
+    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    return VIEW_MODES.includes(stored) ? stored : 'day';
   } catch {
     return 'day';
   }
 };
 
+// Desktop Safari and Firefox have no month picker: they render type="month" as a plain text
+// field, and a controlled one rejects free typing, so those browsers keep the date picker.
+const MONTH_INPUT_SUPPORTED = (() => {
+  try {
+    const input = document.createElement('input');
+    input.setAttribute('type', 'month');
+    return input.type === 'month';
+  } catch {
+    return false;
+  }
+})();
+
 export default function SimulatorTimeline() {
-  // The single navigation anchor in both modes ('YYYY-MM-DD').
+  // The single navigation anchor in every mode ('YYYY-MM-DD').
   const [selectedDate, setSelectedDate] = useState(moment().format('YYYY-MM-DD'));
-  const [viewMode, setViewMode] = useState(readStoredViewMode); // 'day' | 'week'
+  const [viewMode, setViewMode] = useState(readStoredViewMode); // 'day' | 'week' | 'month'
   const [showEmptyRooms, setShowEmptyRooms] = useState(false);
   const [eventsListOpen, setEventsListOpen] = useState(false);
   const [modal, setModal] = useState(null); // null | { mode: 'create' } | { mode: 'edit', event }
   const [focusRowKey, setFocusRowKey] = useState(null); // row to highlight after a week → day drill-down
-  const [base, setBase] = useState(null); // { userId, university, simulators, rooms, teacherMap, teacherIds }
+  const [base, setBase] = useState(null); // { userId, university, simulators, rooms, teacherMap, teacherIds, teachers }
   const [schedules, setSchedules] = useState([]);
   const [events, setEvents] = useState([]);
   const [unscheduledEvents, setUnscheduledEvents] = useState([]); // events with no dates (starts_at null)
@@ -74,10 +92,28 @@ export default function SimulatorTimeline() {
 
   // ISO week (Monday first) containing the anchor day; DST-safe (no millisecond day math).
   const week = useMemo(() => getWeek(selectedDate), [selectedDate]);
+  // Month grid (Mon of the 1st's week → Sun of the last day's week) containing the anchor day.
+  const month = useMemo(() => getMonthGrid(selectedDate), [selectedDate]);
+
+  // Fetched range. Day and Week share the ISO week, so switching between them (or moving
+  // inside the week) keeps the key and never refetches; Month fetches its whole grid.
+  const range = useMemo(() => {
+    const days = viewMode === 'month' ? month.days : week.days;
+    const last = days[days.length - 1];
+    return {
+      key: `${days[0]}..${last}`,
+      from: moment(days[0], 'YYYY-MM-DD').startOf('day'),
+      to: moment(last, 'YYYY-MM-DD').startOf('day').add(1, 'day'), // exclusive
+      days,
+    };
+  }, [viewMode, week, month]);
 
   const today = moment().format('YYYY-MM-DD');
   const isToday = selectedDate === today;
   const isThisWeek = week.days.includes(today);
+  const isThisMonth = month.monthKey === today.slice(0, 7);
+  // The date pill's hidden picker: a month picker where the browser has one, else the date picker.
+  const monthPicker = viewMode === 'month' && MONTH_INPUT_SUPPORTED;
 
   useEffect(() => {
     try {
@@ -135,6 +171,10 @@ export default function SimulatorTimeline() {
           rooms: [...(rms || [])].map(r => r.name).sort((a, b) => a.localeCompare(b)),
           teacherMap,
           teacherIds: (tchs || []).map(t => t.id),
+          // Chip order in the event modal; surname first, like a class list.
+          teachers: (tchs || [])
+            .map(t => ({ id: t.id, name: t.name || '', surname: t.surname || '' }))
+            .sort((a, b) => a.surname.localeCompare(b.surname) || a.name.localeCompare(b.name)),
         });
       } catch (err) {
         console.error(err);
@@ -145,10 +185,10 @@ export default function SimulatorTimeline() {
     loadBase();
   }, []);
 
-  // One ISO week is fetched in both modes, so Day ↔ Week and moving inside the week never refetch.
+  // Refetch only when the fetched range itself changes (see `range`), never on a view switch alone.
   useEffect(() => {
     if (!base) return undefined;
-    let cancelled = false; // a slower response for a previous week must not overwrite the current one
+    let cancelled = false; // a slower response for a previous range must not overwrite the current one
 
     const loadSchedules = async () => {
       try {
@@ -164,17 +204,17 @@ export default function SimulatorTimeline() {
           scheduleQuery = supabase
             .from('teacher_schedules')
             .select('id, teacher_id, session_date, start_time, end_time, simulators, rooms, notes, course, groups, needs_assistance')
-            .gte('session_date', week.days[0])
-            .lte('session_date', week.days[6]);
+            .gte('session_date', range.days[0])
+            .lte('session_date', range.days[range.days.length - 1]);
           if (base.university) scheduleQuery = scheduleQuery.in('teacher_id', base.teacherIds);
         }
 
-        // Events overlapping the local week, compared as UTC instants.
+        // Events overlapping the local range, compared as UTC instants.
         let eventQuery = supabase
           .from('event_codes')
           .select(EVENT_SELECT)
-          .lt('starts_at', week.weekEnd.toISOString())
-          .gt('ends_at', week.weekStart.toISOString())
+          .lt('starts_at', range.to.toISOString())
+          .gt('ends_at', range.from.toISOString())
           .order('starts_at', { ascending: true });
         if (base.university) eventQuery = eventQuery.eq('university', base.university);
 
@@ -194,7 +234,7 @@ export default function SimulatorTimeline() {
           { data: unscheduledData, error: unscheduledErr },
         ] = await Promise.all([scheduleQuery, eventQuery, unscheduledQuery]);
         if (cancelled) return;
-        // Keep whatever loaded; a failed source must not leave the previous week's pills on screen.
+        // Keep whatever loaded; a failed source must not leave the previous range's pills on screen.
         setSchedules(schedErr ? [] : schedData || []);
         setEvents(eventErr ? [] : eventData || []);
         setUnscheduledEvents(unscheduledErr ? [] : unscheduledData || []);
@@ -215,7 +255,7 @@ export default function SimulatorTimeline() {
     return () => {
       cancelled = true;
     };
-  }, [base, week.weekKey, refreshKey]);
+  }, [base, range.key, refreshKey]);
 
   const timeline = useMemo(
     () =>
@@ -233,16 +273,28 @@ export default function SimulatorTimeline() {
     [base, schedules, events, week, selectedDate, showEmptyRooms, viewMode]
   );
 
-  const periodEvents = useMemo(
-    () => buildPeriodEvents({ events, mode: viewMode, date: selectedDate, days: week.days }),
-    [events, viewMode, selectedDate, week]
+  const monthGrid = useMemo(
+    () =>
+      base && viewMode === 'month'
+        ? buildMonthGrid({ base, schedules, events, days: month.days, selectedDate })
+        : null,
+    [base, schedules, events, month, selectedDate, viewMode]
   );
+
+  const periodEvents = useMemo(() => {
+    // Month mode lists the selected month only, like the grid's own count: the padding days of
+    // the neighbouring months are fetched for the cells but never counted.
+    const days = viewMode === 'month'
+      ? month.days.filter(d => d.startsWith(month.monthKey))
+      : range.days;
+    return buildPeriodEvents({ events, mode: viewMode, date: selectedDate, days, base });
+  }, [events, viewMode, selectedDate, range, month, base]);
 
   const hasUnplacedEvents = periodEvents.some(ev => !ev.placed);
   const eventsCount = periodEvents.length + unscheduledEvents.length;
 
   // Whichever view is active drives the count chip, the legend and the empty state.
-  const active = viewMode === 'week' ? weekGrid : timeline;
+  const active = viewMode === 'month' ? monthGrid : viewMode === 'week' ? weekGrid : timeline;
   const activeTotal = active?.total ?? 0;
 
   const canCreate = Boolean(base?.university);
@@ -261,14 +313,14 @@ export default function SimulatorTimeline() {
     setViewMode(mode);
   };
 
-  // Week ±7 keeps the weekday (Wed → Wed); day ±1.
+  // Month ±1 keeps the day of month (moment clamps: 31 Jan → 28 Feb); week ±7 keeps the
+  // weekday (Wed → Wed); day ±1.
   const shiftPeriod = (dir) => {
     setHovered(null);
-    setSelectedDate(
-      moment(selectedDate, 'YYYY-MM-DD')
-        .add(dir * (viewMode === 'week' ? 7 : 1), 'day')
-        .format('YYYY-MM-DD')
-    );
+    const anchor = moment(selectedDate, 'YYYY-MM-DD');
+    if (viewMode === 'month') anchor.add(dir, 'month');
+    else anchor.add(dir * (viewMode === 'week' ? 7 : 1), 'day');
+    setSelectedDate(anchor.format('YYYY-MM-DD'));
   };
 
   const goToToday = () => {
@@ -301,7 +353,7 @@ export default function SimulatorTimeline() {
   const handleEventSaved = ({ starts_at }) => {
     if (starts_at) {
       const d = moment(starts_at).format('YYYY-MM-DD');
-      if (d !== selectedDate) setSelectedDate(d); // week mode lands on that week automatically
+      if (d !== selectedDate) setSelectedDate(d); // week and month modes land on that period automatically
     }
     setRefreshKey(k => k + 1);
   };
@@ -478,9 +530,11 @@ export default function SimulatorTimeline() {
             Simulator Schedule
           </h3>
           <p className="text-xs font-semibold text-[#414141]/60 mt-1">
-            {viewMode === 'week'
-              ? 'Reservations for every simulator and room in your center for the selected week'
-              : 'Reservations for every simulator and room in your center on the selected day'}
+            {viewMode === 'month'
+              ? 'Every class and event in your center for the selected month'
+              : viewMode === 'week'
+                ? 'Reservations for every simulator and room in your center for the selected week'
+                : 'Reservations for every simulator and room in your center on the selected day'}
           </p>
         </div>
 
@@ -518,6 +572,7 @@ export default function SimulatorTimeline() {
             {[
               ['day', 'Day'],
               ['week', 'Week'],
+              ['month', 'Month'],
             ].map(([mode, label]) => (
               <button
                 key={mode}
@@ -538,18 +593,24 @@ export default function SimulatorTimeline() {
             type="button"
             onClick={() => shiftPeriod(-1)}
             className="w-8 h-8 flex items-center justify-center rounded-full border border-[#DCDCDC] text-[#414141]/70 hover:bg-[#DCDCDC]/20 transition-colors"
-            aria-label={viewMode === 'week' ? 'Previous week' : 'Previous day'}
+            aria-label={`Previous ${viewMode}`}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <div className="relative">
             <input
-              type="date"
-              value={selectedDate}
+              type={monthPicker ? 'month' : 'date'}
+              value={monthPicker ? month.monthKey : selectedDate}
               onChange={(e) => {
-                if (!e.target.value) return;
+                const value = e.target.value;
+                // A month picker yields 'YYYY-MM' (anchor on its 1st); the date picker a full
+                // day, which the month grid follows on its own. Anything else is ignored.
+                const next = monthPicker
+                  ? (/^\d{4}-\d{2}$/.test(value) ? `${value}-01` : '')
+                  : value;
+                if (!next) return;
                 setHovered(null);
-                setSelectedDate(e.target.value);
+                setSelectedDate(next);
               }}
               onClick={(e) => {
                 // Browsers only open the native calendar from the (invisible)
@@ -561,14 +622,16 @@ export default function SimulatorTimeline() {
                 }
               }}
               className="absolute inset-0 opacity-0 cursor-pointer"
-              aria-label={viewMode === 'week' ? 'Pick a week' : 'Pick a day'}
+              aria-label={`Pick a ${viewMode}`}
             />
             <div
               className={`px-4 py-1.5 rounded-full text-xs font-semibold border border-[#DCDCDC] bg-[#FFFFFF] text-[#414141] pointer-events-none text-center ${
-                viewMode === 'week' ? 'min-w-[190px]' : 'min-w-[130px]'
+                viewMode === 'week' ? 'min-w-[190px]' : viewMode === 'month' ? 'min-w-[150px]' : 'min-w-[130px]'
               }`}
             >
-              {viewMode === 'week' ? (
+              {viewMode === 'month' ? (
+                month.monthStart.format('MMMM YYYY')
+              ) : viewMode === 'week' ? (
                 <>
                   <span className="text-[#414141]/45 mr-1">W{week.isoWeek} ·</span>
                   {formatWeekLabel(week.weekStart)}
@@ -582,16 +645,18 @@ export default function SimulatorTimeline() {
             type="button"
             onClick={() => shiftPeriod(1)}
             className="w-8 h-8 flex items-center justify-center rounded-full border border-[#DCDCDC] text-[#414141]/70 hover:bg-[#DCDCDC]/20 transition-colors"
-            aria-label={viewMode === 'week' ? 'Next week' : 'Next day'}
+            aria-label={`Next ${viewMode}`}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
           <button
             type="button"
             onClick={goToToday}
-            className={toggleChipClass(viewMode === 'week' ? isThisWeek : isToday)}
+            className={toggleChipClass(
+              viewMode === 'month' ? isThisMonth : viewMode === 'week' ? isThisWeek : isToday
+            )}
           >
-            {viewMode === 'week' ? 'This week' : 'Today'}
+            {viewMode === 'month' ? 'This month' : viewMode === 'week' ? 'This week' : 'Today'}
           </button>
         </div>
 
@@ -601,16 +666,19 @@ export default function SimulatorTimeline() {
               {active.countLabel}
             </span>
           )}
-          <button
-            type="button"
-            onClick={toggleEmptyRooms}
-            aria-pressed={showEmptyRooms}
-            title="Show or hide rooms with no bookings"
-            className={toggleChipClass(showEmptyRooms)}
-          >
-            {showEmptyRooms ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-            Empty rooms
-          </button>
+          {/* Month cells list classes and events, not resources, so the rooms filter has nothing to do. */}
+          {viewMode !== 'month' && (
+            <button
+              type="button"
+              onClick={toggleEmptyRooms}
+              aria-pressed={showEmptyRooms}
+              title="Show or hide rooms with no bookings"
+              className={toggleChipClass(showEmptyRooms)}
+            >
+              {showEmptyRooms ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              Empty rooms
+            </button>
+          )}
           {eventsCount > 0 && (
             <button
               type="button"
@@ -647,9 +715,11 @@ export default function SimulatorTimeline() {
       {eventsListOpen && eventsCount > 0 && (
         <EventsStrip
           title={
-            viewMode === 'week'
-              ? `Events · ${formatWeekLabel(week.weekStart)}`
-              : `Events on ${moment(selectedDate, 'YYYY-MM-DD').format('ddd, D MMM')}`
+            viewMode === 'month'
+              ? `Events · ${month.monthStart.format('MMMM YYYY')}`
+              : viewMode === 'week'
+                ? `Events · ${formatWeekLabel(week.weekStart)}`
+                : `Events on ${moment(selectedDate, 'YYYY-MM-DD').format('ddd, D MMM')}`
           }
           events={periodEvents}
           unscheduled={unscheduledEvents}
@@ -675,7 +745,22 @@ export default function SimulatorTimeline() {
             loading && hasLoaded ? 'transition-opacity opacity-60 pointer-events-none' : ''
           }`}
         >
-          {viewMode === 'week' && weekGrid ? (
+          {viewMode === 'month' && monthGrid ? (
+            <>
+              <MonthGrid
+                grid={monthGrid}
+                onOpenDay={openDay}
+                onEditEvent={openEdit}
+                onHoverItem={showTooltip}
+                onLeaveItem={hideTooltip}
+              />
+              {monthGrid.total === 0 && !loading && (
+                <div className="text-center text-sm font-medium text-[#414141]/50 mt-4">
+                  No reservations in {month.monthStart.format('MMMM YYYY')} — all simulators and rooms are free.
+                </div>
+              )}
+            </>
+          ) : viewMode === 'week' && weekGrid ? (
             <>
               <WeekGrid
                 grid={weekGrid}
@@ -763,7 +848,7 @@ export default function SimulatorTimeline() {
             {hovered.item.kind === 'event' ? (
               <>
                 <div className="text-xs font-bold whitespace-nowrap">
-                  {viewMode === 'week' && hovered.item.dateLabel ? `${hovered.item.dateLabel} · ` : ''}
+                  {viewMode !== 'day' && hovered.item.dateLabel ? `${hovered.item.dateLabel} · ` : ''}
                   {hovered.item.spansBeyondDay
                     ? `${moment(hovered.item.startsAt).format('D MMM HH:mm')} – ${moment(hovered.item.endsAt).format('D MMM HH:mm')}`
                     : `${formatTime(hovered.item.startMin)} – ${formatTime(hovered.item.endMin)}`}
@@ -788,12 +873,17 @@ export default function SimulatorTimeline() {
                     Rooms: {hovered.item.roomNames.join(', ')}
                   </div>
                 )}
+                {hovered.item.teacherNames?.length > 0 && (
+                  <div className="text-[11px] font-medium text-white/60 mt-0.5">
+                    Teachers: {hovered.item.teacherNames.join(', ')}
+                  </div>
+                )}
                 <div className="text-[10px] font-medium text-white/50 mt-1.5">Click to edit</div>
               </>
             ) : (
               <>
                 <div className="text-xs font-bold whitespace-nowrap">
-                  {viewMode === 'week' && hovered.item.dateLabel ? `${hovered.item.dateLabel} · ` : ''}
+                  {viewMode !== 'day' && hovered.item.dateLabel ? `${hovered.item.dateLabel} · ` : ''}
                   {formatTime(hovered.item.startMin)} – {formatTime(hovered.item.endMin)}
                 </div>
                 <div className="text-xs font-semibold text-white/90 mt-1 whitespace-nowrap">
@@ -828,7 +918,7 @@ export default function SimulatorTimeline() {
                     {hovered.item.note}
                   </div>
                 )}
-                {viewMode === 'week' && (
+                {viewMode !== 'day' && (
                   <div className="text-[10px] font-medium text-white/50 mt-1.5">Click to open the day</div>
                 )}
               </>
@@ -848,6 +938,7 @@ export default function SimulatorTimeline() {
         userId={base?.userId || null}
         simulators={base?.simulators || []}
         rooms={base?.rooms || []}
+        teachers={base?.teachers || []}
         defaultDate={selectedDate}
       />
     </div>

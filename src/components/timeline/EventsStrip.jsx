@@ -37,6 +37,11 @@ export default function EventsStrip({ title, events = [], unscheduled = [], onEd
           <Ticket className="w-3 h-3 shrink-0" />
           <span className="truncate">{ev.title}</span>
           <span className="font-semibold tabular-nums opacity-70 shrink-0">{ev.timeLabel}</span>
+          {ev.teacherShortNames?.length > 0 && (
+            <span className="font-medium opacity-70 truncate">
+              · {ev.teacherShortNames.join(', ')}
+            </span>
+          )}
           {!ev.placed && (
             <span className="font-medium text-[#78003F]/60 shrink-0">· no simulator or room</span>
           )}

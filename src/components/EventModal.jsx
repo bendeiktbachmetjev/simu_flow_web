@@ -64,6 +64,7 @@ const buildInitialForm = (defaultDate) => {
     endEdited: false,
     selected: [],
     selectedRooms: [],
+    selectedTeachers: [],
   };
 };
 
@@ -83,8 +84,13 @@ const buildEditForm = (ev) => {
     endEdited: true,
     selected: (ev.allowed_simulators || []).map(String),
     selectedRooms: Array.isArray(ev.rooms) ? ev.rooms.filter(Boolean) : [],
+    // Rows created before migration 032 come back with '{}' (never null), but stay defensive.
+    selectedTeachers: Array.isArray(ev.teacher_ids) ? ev.teacher_ids.filter(Boolean).map(String) : [],
   };
 };
+
+// 'Pavardenis Vardenis' — surname first so the chips read like a class list.
+const teacherLabel = (t) => [t.surname, t.name].filter(Boolean).join(' ') || 'Unnamed teacher';
 
 // Keys of the busy map, matching `${resource_type}:${resource_key}` from the RPC.
 const simKey = (number) => `simulator:${number}`;
@@ -132,6 +138,7 @@ export default function EventModal({
   userId,
   simulators,
   rooms,
+  teachers,
   defaultDate,
 }) {
   const isEdit = mode === 'edit';
@@ -271,8 +278,18 @@ export default function EventModal({
 
   const sims = Array.isArray(simulators) ? simulators : [];
   const roomList = Array.isArray(rooms) ? rooms.filter(Boolean) : [];
+  const teacherList = Array.isArray(teachers) ? teachers.filter((t) => t && t.id) : [];
   const selectedCount = form.selected.length;
   const selectedRoomCount = form.selectedRooms.length;
+  // Ids in the order of the teachers list, so the saved array never depends on click order.
+  // An id with no chip (a teacher added since the page loaded) stays at the end, sorted, so a
+  // save never silently drops a teacher — the same rule as the mobile app.
+  const knownTeacherIds = teacherList.map((t) => String(t.id));
+  const selectedTeacherIds = [
+    ...knownTeacherIds.filter((id) => form.selectedTeachers.includes(id)),
+    ...form.selectedTeachers.filter((id) => !knownTeacherIds.includes(id)).sort(),
+  ];
+  const selectedTeacherCount = selectedTeacherIds.length;
 
   const updateStart = (patch) =>
     setForm((f) => {
@@ -311,6 +328,14 @@ export default function EventModal({
       selectedRooms: f.selectedRooms.includes(name)
         ? f.selectedRooms.filter((r) => r !== name)
         : [...f.selectedRooms, name],
+    }));
+
+  const toggleTeacher = (id) =>
+    setForm((f) => ({
+      ...f,
+      selectedTeachers: f.selectedTeachers.includes(id)
+        ? f.selectedTeachers.filter((t) => t !== id)
+        : [...f.selectedTeachers, id],
     }));
 
   const requestClose = () => {
@@ -405,6 +430,7 @@ export default function EventModal({
             event_name: name,
             allowed_simulators: allowedSimulators,
             rooms: sortedRooms,
+            teacher_ids: selectedTeacherIds,
             starts_at: startsAt ?? null,
             ends_at: endsAt ?? null,
           })
@@ -435,6 +461,7 @@ export default function EventModal({
               university,
               allowed_simulators: allowedSimulators,
               rooms: sortedRooms,
+              teacher_ids: selectedTeacherIds,
               created_by: userId,
               starts_at: startsAt,
               ends_at: endsAt,
@@ -558,6 +585,11 @@ export default function EventModal({
     return `${simText} · ${roomText} selected`;
   })();
 
+  const teacherHint =
+    selectedTeacherCount === 0
+      ? 'No teachers selected — anyone can lead this event'
+      : `${selectedTeacherCount} ${selectedTeacherCount === 1 ? 'teacher' : 'teachers'} selected`;
+
   return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-[#414141]/40 backdrop-blur-sm p-4"
@@ -590,7 +622,7 @@ export default function EventModal({
             </h3>
             <p className="text-xs font-semibold text-[#414141]/60 mt-1">
               {isEdit
-                ? 'Change the name, dates, simulators and rooms. The access code stays the same.'
+                ? 'Change the name, teachers, dates, simulators and rooms. The access code stays the same.'
                 : 'Guests join with the code; the event occupies the selected simulators and rooms on the calendar.'}
             </p>
           </div>
@@ -626,6 +658,39 @@ export default function EventModal({
               disabled={busy}
               className={INPUT_CLASS}
             />
+          </div>
+
+          {/* Directly under the name (Karolina: "po pavadinimu"). Teachers have no busy state,
+              so these are plain toggles rather than renderChip. */}
+          <div>
+            <span className={LABEL_CLASS}>Teachers</span>
+            {teacherList.length === 0 ? (
+              <p className="text-xs font-medium text-[#414141]/50">
+                No teachers found for your center.
+              </p>
+            ) : (
+              <>
+                <div className={CHIP_BOX_CLASS}>
+                  {teacherList.map((t) => {
+                    const id = String(t.id);
+                    const active = form.selectedTeachers.includes(id);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => toggleTeacher(id)}
+                        disabled={busy}
+                        aria-pressed={active}
+                        className={`${CHIP_CLASS} ${active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS}`}
+                      >
+                        {teacherLabel(t)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className={HINT_CLASS}>{teacherHint}</p>
+              </>
+            )}
           </div>
 
           <div>
