@@ -2,7 +2,7 @@
 // rounding, privacy folding and the frame of a chart series.
 // Pure: "now" always comes from the dataset (ds.nowMs), never from a clock.
 import { PRIVACY_MIN_PEOPLE } from '../constants.js';
-import { buildBuckets, bucketIndexer, dayKeyOf } from '../period.js';
+import { buildBuckets, bucketIndexer, countedFrom, dayKeyOf } from '../period.js';
 import { round1 } from '../clean/visits.js';
 
 export { round1 };
@@ -31,13 +31,16 @@ export const inPeriod = (value, period) => {
 
 // Days that can carry a denominator (available hours). Nothing was recorded before the
 // first activity, so counting those days as "open but unused" would understate every %.
+// Nor does any day before the counted window (STATS_START_DATE) count, whatever period is
+// passed in — resolved periods already start there.
 // horizon 'elapsed' stops at today (period.effTo), 'full' runs to the end of the period.
 // A period that lies wholly before the first activity gives an empty range (from ≥ toExcl).
 export const effectiveRange = (period, ds, { horizon = 'elapsed' } = {}) => {
   const toExcl = horizon === 'full' ? period.to : period.effTo;
+  const start = countedFrom(period.from, ds?.statsStart);
   const firstDay = Number.isFinite(ds?.firstActivityMs) ? dayKeyOf(ds.firstActivityMs) : null;
-  const clipped = firstDay !== null && firstDay > period.from;
-  return { from: clipped ? firstDay : period.from, toExcl, clipped };
+  const clipped = firstDay !== null && firstDay > start;
+  return { from: clipped ? firstDay : start, toExcl, clipped };
 };
 
 // A comparison is shown only when the earlier window holds recorded activity.

@@ -5,7 +5,7 @@ import { resolvePeriod } from '../period.js';
 import { computeSimulators } from '../metrics/simulators.js';
 import { computeRooms } from '../metrics/rooms.js';
 import {
-  makeRef, makeRaw, centerSession, simSession, schedule, eventCode, localMs,
+  makeRef, makeRaw, centerSession, simSession, schedule, eventCode, localMs, ALL_DAYS,
 } from './fixtures.mjs';
 
 const NOW = localMs('2026-09-16 10:30'); // Wednesday
@@ -88,7 +88,8 @@ test('every current simulator keeps a row; most used first, then calendar order'
 test('"last used" looks back before the period; the session itself stays outside it', () => {
   const ref = makeRef();
   const raw = makeRaw({ simSessions: [simSession('sim-4', 's1', '2026-06-15 10:00', '2026-06-15 10:30', 'ss-june')] });
-  const out = computeSimulators(buildDataset(raw, ref, NOW), ref, september);
+  // June is before STATS_START_DATE: with the floor on, that session would not exist at all.
+  const out = computeSimulators(buildDataset(raw, ref, NOW, ALL_DAYS), ref, september);
   const row = out.perSimulator.find((item) => item.number === '4');
   assert.equal(row.sessions, 0);
   assert.equal(row.lastUsedMs, localMs('2026-06-15 10:00'));
@@ -178,7 +179,8 @@ test('series: sessions and hours by start bucket, nulls in future buckets', () =
 // Rooms (bookings only)
 // ---------------------------------------------------------------------------
 
-const juneWeek = resolvePeriod('custom', NOW, { custom: { from: '2026-06-15', to: '2026-06-21' } });
+// June 2026 lies before STATS_START_DATE, so these room tests switch the floor off.
+const juneWeek = resolvePeriod('custom', NOW, { ...ALL_DAYS, custom: { from: '2026-06-15', to: '2026-06-21' } });
 
 const roomsRaw = () =>
   makeRaw({
@@ -201,7 +203,7 @@ const roomsRaw = () =>
 
 test('rooms: merged per room, open hours only, unlisted rooms outside every %', () => {
   const ref = makeRef();
-  const out = computeRooms(buildDataset(roomsRaw(), ref, NOW), ref, juneWeek);
+  const out = computeRooms(buildDataset(roomsRaw(), ref, NOW, ALL_DAYS), ref, juneWeek);
 
   assert.deepEqual(
     {
@@ -245,7 +247,7 @@ test('rooms: merged per room, open hours only, unlisted rooms outside every %', 
 
 test('rooms heatmap: true share of room-hours per weekday × two-hour slot; weekend only if booked', () => {
   const ref = makeRef();
-  const { heatmap } = computeRooms(buildDataset(roomsRaw(), ref, NOW), ref, juneWeek);
+  const { heatmap } = computeRooms(buildDataset(roomsRaw(), ref, NOW, ALL_DAYS), ref, juneWeek);
 
   assert.deepEqual(heatmap.weekdays, [1, 2, 3, 4, 5, 6]);
   assert.deepEqual(heatmap.weekdayLabels, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
@@ -261,8 +263,8 @@ test('rooms heatmap: true share of room-hours per weekday × two-hour slot; week
   assert.equal(heatmap.maxPct, 50);
   assert.deepEqual(heatmap.topSlot, { weekdayLabel: 'Tue', slot: '10–12', pct: 50 });
 
-  const quietWeek = resolvePeriod('custom', NOW, { custom: { from: '2026-06-22', to: '2026-06-28' } });
-  const quiet = computeRooms(buildDataset(roomsRaw(), ref, NOW), ref, quietWeek);
+  const quietWeek = resolvePeriod('custom', NOW, { ...ALL_DAYS, custom: { from: '2026-06-22', to: '2026-06-28' } });
+  const quiet = computeRooms(buildDataset(roomsRaw(), ref, NOW, ALL_DAYS), ref, quietWeek);
   assert.deepEqual(quiet.heatmap.weekdays, [1, 2, 3, 4, 5]);
   assert.equal(quiet.heatmap.topSlot, null);
   assert.equal(quiet.totals.peak, null);
@@ -271,7 +273,7 @@ test('rooms heatmap: true share of room-hours per weekday × two-hour slot; week
 
 test('rooms horizon: "elapsed" stops at this minute, "full" includes planned bookings', () => {
   const ref = makeRef();
-  const ds = buildDataset(roomsRaw(), ref, NOW);
+  const ds = buildDataset(roomsRaw(), ref, NOW, ALL_DAYS);
 
   const elapsed = computeRooms(ds, ref, september);
   assert.equal(elapsed.totals.bookings, 1);

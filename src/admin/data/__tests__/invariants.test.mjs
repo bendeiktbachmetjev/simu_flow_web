@@ -16,16 +16,18 @@ import { computeOverview } from '../metrics/overview.js';
 import { computeLive } from '../metrics/live.js';
 import {
   SCENARIO_NOW, makeScenarioRaw, makeRef, makeRaw, centerSession, simSession, schedule, eventCode,
-  localMs, localIso,
+  localMs, localIso, ALL_DAYS,
 } from './fixtures.mjs';
 
+// The scenario's busy week is in June 2026, before STATS_START_DATE: these tests pin the metric
+// rules with the counted-window floor off (statsStart.test.mjs tests the floor).
 const NOW = localMs(SCENARIO_NOW);
 const ref = makeRef();
-const ds = buildDataset(makeScenarioRaw(), ref, NOW);
+const ds = buildDataset(makeScenarioRaw(), ref, NOW, ALL_DAYS);
 
-const thisYear = resolvePeriod('thisYear', NOW, { firstActivityMs: ds.firstActivityMs });
-const june = resolvePeriod('custom', NOW, { custom: { from: '2026-06-01', to: '2026-06-30' } });
-const twoDays = resolvePeriod('custom', NOW, { custom: { from: '2026-06-16', to: '2026-06-17' } });
+const thisYear = resolvePeriod('thisYear', NOW, { ...ALL_DAYS, firstActivityMs: ds.firstActivityMs });
+const june = resolvePeriod('custom', NOW, { ...ALL_DAYS, custom: { from: '2026-06-01', to: '2026-06-30' } });
+const twoDays = resolvePeriod('custom', NOW, { ...ALL_DAYS, custom: { from: '2026-06-16', to: '2026-06-17' } });
 
 const sum = (rows, key) => rows.reduce((total, row) => total + (row[key] ?? 0), 0);
 const kpi = (overview, id) => overview.kpis.find((item) => item.id === id);
@@ -239,7 +241,7 @@ test('the same visit has the same length under two periods', () => {
 });
 
 test('zero rows are kept: simulators, rooms, years of study', () => {
-  const quiet = resolvePeriod('custom', NOW, { custom: { from: '2026-07-06', to: '2026-07-12' } });
+  const quiet = resolvePeriod('custom', NOW, { ...ALL_DAYS, custom: { from: '2026-07-06', to: '2026-07-12' } });
   const simulators = computeSimulators(ds, ref, quiet);
   assert.equal(simulators.perSimulator.length, 4);
   assert.ok(simulators.perSimulator.every((row) => row.sessions === 0 && row.hours === 0 && row.utilisationPct === 0));
@@ -433,7 +435,7 @@ test('KPI tiles: ids, formats, routes, hints, sub-lines, sparklines', () => {
   assert.deepEqual(kpi(overview, 'studentVisits').spark, [0, 0, 0, 0, 0, 7, 0, 0, 1]);
   assert.deepEqual(overview.counted, { clipped: true, fromLabel: '15 Jun 2026' });
 
-  const quiet = resolvePeriod('custom', NOW, { custom: { from: '2026-07-06', to: '2026-07-12' } });
+  const quiet = resolvePeriod('custom', NOW, { ...ALL_DAYS, custom: { from: '2026-07-06', to: '2026-07-12' } });
   assert.deepEqual(computeOverview(ds, ref, quiet, null).kpis.map((item) => plainText(item.sub)), [
     'No student visits in this period',
     '0 of 6 registered in SimuFlow',
@@ -467,7 +469,8 @@ test('data notes: only what happened in the period, singular and plural', () => 
       ],
     }),
     ref,
-    NOW
+    NOW,
+    ALL_DAYS
   );
   assert.deepEqual(computeVisitors(busy, ref, june).dataNotes.map(plainText), [
     '2 visits had no tap-out; they are counted with the typical visit length of 2 h.',
@@ -477,9 +480,9 @@ test('data notes: only what happened in the period, singular and plural', () => 
 });
 
 test('an empty period can point to the busiest month of the whole history', () => {
-  const quiet = resolvePeriod('custom', NOW, { custom: { from: '2026-07-06', to: '2026-07-12' } });
+  const quiet = resolvePeriod('custom', NOW, { ...ALL_DAYS, custom: { from: '2026-07-06', to: '2026-07-12' } });
   assert.deepEqual(computeOverview(ds, ref, quiet, null).peakMonth, { key: '2026-06', label: 'June 2026', visits: 9 });
-  const nothing = buildDataset(makeRaw(), ref, NOW);
+  const nothing = buildDataset(makeRaw(), ref, NOW, ALL_DAYS);
   assert.equal(computeOverview(nothing, ref, thisYear, null).peakMonth, null);
 });
 
@@ -497,7 +500,7 @@ test('highlights of the small scenario: slots without an eligible candidate are 
   ]);
   assert.deepEqual(insights.map(boldText), [['Mon 15 Jun'], ['1 guest event'], ['Simulator 3']]);
 
-  const quiet = resolvePeriod('custom', NOW, { custom: { from: '2026-07-06', to: '2026-07-12' } });
+  const quiet = resolvePeriod('custom', NOW, { ...ALL_DAYS, custom: { from: '2026-07-06', to: '2026-07-12' } });
   assert.deepEqual(computeOverview(ds, ref, quiet, null).insights, []);
 });
 
@@ -513,9 +516,9 @@ const WEEKDAYS_2 = ['2026-06-08', '2026-06-09', '2026-06-10', '2026-06-11', '202
 const visitsOn = (date, userIds) =>
   userIds.map((userId) => centerSession(userId, `${date} 09:00`, `${date} 11:00`, `cs-${date}-${userId}`));
 const overviewOf = (raw, period = 'thisYear') => {
-  const dataset = buildDataset(makeRaw(raw), bigRef, NOW);
+  const dataset = buildDataset(makeRaw(raw), bigRef, NOW, ALL_DAYS);
   const resolved = typeof period === 'string'
-    ? resolvePeriod(period, NOW, { firstActivityMs: dataset.firstActivityMs })
+    ? resolvePeriod(period, NOW, { ...ALL_DAYS, firstActivityMs: dataset.firstActivityMs })
     : period;
   return computeOverview(dataset, bigRef, resolved, null);
 };

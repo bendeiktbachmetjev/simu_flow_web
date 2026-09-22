@@ -5,10 +5,13 @@ import {
   dayKeyOf, diffDays, eachDay, hourOf, isoWeekdayOf, monthKeyOf, pickGranularity, previousPeriod, resolvePeriod,
   shiftPeriod, toMs,
 } from '../period.js';
-import { localMs } from './fixtures.mjs';
+import { ALL_DAYS, localMs } from './fixtures.mjs';
 
+// These tests pin the calendar arithmetic, mostly on dates before STATS_START_DATE, so the
+// counted-window floor is off; statsStart.test.mjs covers the floor.
+const resolve = (preset, nowMs, options = {}) => resolvePeriod(preset, nowMs, { ...ALL_DAYS, ...options });
 const NOW = localMs('2026-09-20 13:30'); // Sunday
-const custom = (from, to, nowMs = NOW) => resolvePeriod('custom', nowMs, { custom: { from, to } });
+const custom = (from, to, nowMs = NOW) => resolve('custom', nowMs, { custom: { from, to } });
 const range = (p) => [p.from, p.to];
 
 test('presets', () => {
@@ -18,12 +21,12 @@ test('presets', () => {
 });
 
 test('resolvePeriod: this year on 20 Sep 2026', () => {
-  const p = resolvePeriod('thisYear', NOW);
+  const p = resolve('thisYear', NOW);
   assert.deepEqual(
     { ...p },
     {
       preset: 'thisYear', offset: 0, label: '2026', from: '2026-01-01', to: '2027-01-01',
-      fromMs: localMs('2026-01-01 00:00'), toMs: localMs('2027-01-01 00:00'),
+      statsStart: null, startClamped: false, fromMs: localMs('2026-01-01 00:00'), toMs: localMs('2027-01-01 00:00'),
       effTo: '2026-09-21', effToMs: localMs('2026-09-21 00:00'),
       days: 365, effDays: 263, isPartial: true, isFuture: false, granularity: 'month',
       key: '2026-01-01..2027-01-01', today: '2026-09-20',
@@ -32,54 +35,54 @@ test('resolvePeriod: this year on 20 Sep 2026', () => {
 });
 
 test('resolvePeriod: labels and ranges of every preset', () => {
-  const month = resolvePeriod('thisMonth', NOW);
+  const month = resolve('thisMonth', NOW);
   assert.deepEqual([month.label, ...range(month), month.effTo, month.granularity], ['September 2026', '2026-09-01', '2026-10-01', '2026-09-21', 'day']);
 
-  const year = resolvePeriod('academicYear', NOW);
+  const year = resolve('academicYear', NOW);
   assert.deepEqual([year.label, ...range(year)], ['2026/27', '2026-09-01', '2027-09-01']);
-  const yearInSpring = resolvePeriod('academicYear', localMs('2026-05-10 09:00'));
+  const yearInSpring = resolve('academicYear', localMs('2026-05-10 09:00'));
   assert.deepEqual([yearInSpring.label, ...range(yearInSpring)], ['2025/26', '2025-09-01', '2026-09-01']);
 
-  const all = resolvePeriod('allTime', NOW, { firstActivityMs: localMs('2026-03-01 09:12'), offset: -3 });
+  const all = resolve('allTime', NOW, { firstActivityMs: localMs('2026-03-01 09:12'), offset: -3 });
   assert.deepEqual([all.label, ...range(all), all.offset, all.effTo], ['All time', '2026-03-01', '2026-09-21', 0, '2026-09-21']);
-  assert.deepEqual(range(resolvePeriod('allTime', NOW)), ['2026-01-01', '2026-09-21'], 'no activity yet → from 1 Jan');
+  assert.deepEqual(range(resolve('allTime', NOW)), ['2026-01-01', '2026-09-21'], 'no activity yet → from 1 Jan');
 
   const c = custom('2026-07-06', '2026-08-19');
   assert.deepEqual([c.label, ...range(c), c.days, c.isPartial, c.granularity], ['6 Jul – 19 Aug 2026', '2026-07-06', '2026-08-20', 45, false, 'week']);
   assert.equal(custom('2025-12-29', '2026-01-04').label, '29 Dec 2025 – 4 Jan 2026');
   assert.equal(custom('2026-07-06', '2026-07-06').label, '6 Jul 2026');
 
-  const past = resolvePeriod('thisYear', NOW, { offset: -1 });
+  const past = resolve('thisYear', NOW, { offset: -1 });
   assert.deepEqual([past.label, past.effTo, past.effDays, past.isPartial], ['2025', '2026-01-01', 365, false]);
 
-  const future = resolvePeriod('thisMonth', NOW, { offset: 2 });
+  const future = resolve('thisMonth', NOW, { offset: 2 });
   assert.deepEqual([future.label, future.isFuture, future.effDays, future.effTo], ['November 2026', true, 0, '2026-11-01']);
 });
 
 test('resolvePeriod: bad input falls back to the default preset', () => {
-  assert.equal(resolvePeriod('nonsense', NOW).preset, 'thisYear');
+  assert.equal(resolve('nonsense', NOW).preset, 'thisYear');
   assert.equal(custom('2026-08-19', '2026-07-06').preset, 'thisYear', 'start after end');
   assert.equal(custom('2026-02-30', '2026-03-05').preset, 'thisYear', 'not a real date');
-  assert.equal(resolvePeriod('custom', NOW).preset, 'thisYear');
+  assert.equal(resolve('custom', NOW).preset, 'thisYear');
 });
 
 test('semester: Spring 2026 in July (just ended), Autumn 2026 in September', () => {
-  const july = resolvePeriod('semester', localMs('2026-07-15 10:00'));
+  const july = resolve('semester', localMs('2026-07-15 10:00'));
   assert.deepEqual([...range(july), july.label], ['2026-02-01', '2026-07-01', 'Spring 2026 (ended 30 Jun)']);
   assert.equal(july.isPartial, false);
 
-  const september = resolvePeriod('semester', NOW);
+  const september = resolve('semester', NOW);
   assert.deepEqual([...range(september), september.label], ['2026-09-01', '2027-02-01', 'Autumn 2026']);
 
-  const january = resolvePeriod('semester', localMs('2027-01-20 10:00'));
+  const january = resolve('semester', localMs('2027-01-20 10:00'));
   assert.deepEqual([...range(january), january.label], ['2026-09-01', '2027-02-01', 'Autumn 2026']);
 
-  const april = resolvePeriod('semester', localMs('2026-04-02 10:00'));
+  const april = resolve('semester', localMs('2026-04-02 10:00'));
   assert.deepEqual([...range(april), april.label], ['2026-02-01', '2026-07-01', 'Spring 2026']);
 
-  const before = resolvePeriod('semester', NOW, { offset: -1 });
+  const before = resolve('semester', NOW, { offset: -1 });
   assert.deepEqual([...range(before), before.label], ['2026-02-01', '2026-07-01', 'Spring 2026']);
-  const twoBack = resolvePeriod('semester', NOW, { offset: -2 });
+  const twoBack = resolve('semester', NOW, { offset: -2 });
   assert.deepEqual([...range(twoBack), twoBack.label], ['2025-09-01', '2026-02-01', 'Autumn 2025']);
 });
 
@@ -92,7 +95,7 @@ test('previousPeriod: DST week', () => {
 });
 
 test('previousPeriod: whole months compare with whole months', () => {
-  const march = resolvePeriod('thisMonth', NOW, { offset: -6 });
+  const march = resolve('thisMonth', NOW, { offset: -6 });
   assert.deepEqual(range(march), ['2026-03-01', '2026-04-01']);
   const prev = previousPeriod(march);
   assert.deepEqual(range(prev), ['2026-02-01', '2026-03-01']);
@@ -103,39 +106,39 @@ test('previousPeriod: whole months compare with whole months', () => {
   const julToNov = custom('2026-07-01', '2026-11-30', localMs('2027-03-01 09:00'));
   assert.equal(previousPeriod(julToNov).compareLabel, 'vs Feb – Jun 2026');
 
-  const spring = resolvePeriod('semester', NOW, { offset: -1 });
+  const spring = resolve('semester', NOW, { offset: -1 });
   const beforeSpring = previousPeriod(spring);
   assert.deepEqual(range(beforeSpring), ['2025-09-01', '2026-02-01']);
   assert.equal(beforeSpring.compareLabel, 'vs Sep 2025 – Jan 2026');
 
-  assert.equal(previousPeriod(resolvePeriod('thisYear', NOW, { offset: -1 })).compareLabel, 'vs 2024');
+  assert.equal(previousPeriod(resolve('thisYear', NOW, { offset: -1 })).compareLabel, 'vs 2024');
 });
 
 test('previousPeriod: a running period compares its elapsed days', () => {
-  const year = previousPeriod(resolvePeriod('thisYear', NOW)); // 2026-01-01..2026-09-21 elapsed
+  const year = previousPeriod(resolve('thisYear', NOW)); // 2026-01-01..2026-09-21 elapsed
   assert.deepEqual(range(year), ['2025-04-13', '2026-01-01']);
   assert.equal(year.days, 263);
   assert.equal(year.compareLabel, 'vs previous 263 days');
 
-  const month = previousPeriod(resolvePeriod('thisMonth', NOW)); // 2026-09-01..09-21 elapsed
+  const month = previousPeriod(resolve('thisMonth', NOW)); // 2026-09-01..09-21 elapsed
   assert.deepEqual(range(month), ['2026-08-12', '2026-09-01']);
   assert.equal(month.compareLabel, 'vs previous 20 days');
 
   // on 31 Aug the elapsed part of the year is exactly Jan–Aug → whole months again
-  const endOfAugust = previousPeriod(resolvePeriod('thisYear', localMs('2026-08-31 18:00')));
+  const endOfAugust = previousPeriod(resolve('thisYear', localMs('2026-08-31 18:00')));
   assert.deepEqual(range(endOfAugust), ['2025-05-01', '2026-01-01']);
   assert.equal(endOfAugust.compareLabel, 'vs May – Dec 2025');
 });
 
 test('previousPeriod: none for All time or for a period that has not started', () => {
-  assert.equal(previousPeriod(resolvePeriod('allTime', NOW, { firstActivityMs: localMs('2026-03-01 09:00') })), null);
-  assert.equal(previousPeriod(resolvePeriod('thisMonth', NOW, { offset: 1 })), null);
+  assert.equal(previousPeriod(resolve('allTime', NOW, { firstActivityMs: localMs('2026-03-01 09:00') })), null);
+  assert.equal(previousPeriod(resolve('thisMonth', NOW, { offset: 1 })), null);
   assert.equal(previousPeriod(null), null);
 });
 
 test('shift: Sep 2026 → Aug 2026; never past today or before the first activity', () => {
   const first = localMs('2026-03-01 09:12');
-  const september = resolvePeriod('thisMonth', NOW);
+  const september = resolve('thisMonth', NOW);
   assert.deepEqual(canShiftPeriod(september, NOW, { firstActivityMs: first }), { prev: true, next: false });
 
   const august = shiftPeriod(september, -1, NOW, { firstActivityMs: first });
@@ -143,11 +146,11 @@ test('shift: Sep 2026 → Aug 2026; never past today or before the first activit
   assert.equal(shiftPeriod(august, 1, NOW, { firstActivityMs: first }).label, 'September 2026');
   assert.equal(shiftPeriod(september, 1, NOW, { firstActivityMs: first }), september, 'cannot step into the future');
 
-  const march = resolvePeriod('thisMonth', NOW, { offset: -6 });
+  const march = resolve('thisMonth', NOW, { offset: -6 });
   assert.deepEqual(canShiftPeriod(march, NOW, { firstActivityMs: first }), { prev: false, next: true });
   assert.equal(shiftPeriod(march, -1, NOW, { firstActivityMs: first }), march);
 
-  assert.deepEqual(canShiftPeriod(resolvePeriod('allTime', NOW), NOW, { firstActivityMs: first }), { prev: false, next: false });
+  assert.deepEqual(canShiftPeriod(resolve('allTime', NOW), NOW, { firstActivityMs: first }), { prev: false, next: false });
   assert.deepEqual(canShiftPeriod(custom('2026-07-06', '2026-08-19'), NOW, { firstActivityMs: first }), { prev: false, next: false });
   assert.deepEqual(canShiftPeriod(september, NOW, {}), { prev: false, next: false }, 'no data → nowhere to go');
 });
@@ -161,7 +164,7 @@ test('pickGranularity: 31 → day, 32 → week, 120 → week, 121 → month', ()
 });
 
 test('buildBuckets: months over the nominal year, future slots flagged', () => {
-  const buckets = buildBuckets(resolvePeriod('thisYear', NOW));
+  const buckets = buildBuckets(resolve('thisYear', NOW));
   assert.equal(buckets.length, 12);
   assert.deepEqual(buckets.map((b) => b.label), ['Jan ’26', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
   assert.deepEqual(buckets[8], {
@@ -171,7 +174,7 @@ test('buildBuckets: months over the nominal year, future slots flagged', () => {
   assert.deepEqual(buckets.map((b) => b.isFuture), [...Array(9).fill(false), true, true, true]);
   assert.equal(buckets.filter((b) => b.isPartial).length, 1);
 
-  const academic = buildBuckets(resolvePeriod('academicYear', NOW, { offset: -1 }));
+  const academic = buildBuckets(resolve('academicYear', NOW, { offset: -1 }));
   assert.deepEqual(academic.map((b) => b.label), ['Sep ’25', 'Oct', 'Nov', 'Dec', 'Jan ’26', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']);
 });
 
@@ -189,21 +192,21 @@ test('buildBuckets: ISO weeks labelled by their Monday and cut at the period edg
 });
 
 test('buildBuckets: days; today is "in progress"; All time ends in a running month', () => {
-  const september = buildBuckets(resolvePeriod('thisMonth', NOW));
+  const september = buildBuckets(resolve('thisMonth', NOW));
   assert.equal(september.length, 30);
   assert.deepEqual([september[19].key, september[19].label, september[19].longLabel], ['2026-09-20', '20 Sep', 'Sun 20 Sep 2026']);
   assert.deepEqual([september[18].isPartial, september[19].isPartial, september[20].isFuture], [false, true, true]);
 
   // the DST month still has one bucket per calendar day
-  assert.equal(buildBuckets(resolvePeriod('thisMonth', NOW, { offset: 1 })).length, 31);
+  assert.equal(buildBuckets(resolve('thisMonth', NOW, { offset: 1 })).length, 31);
 
-  const all = buildBuckets(resolvePeriod('allTime', NOW, { firstActivityMs: localMs('2026-03-16 10:00') }));
+  const all = buildBuckets(resolve('allTime', NOW, { firstActivityMs: localMs('2026-03-16 10:00') }));
   assert.deepEqual(all.map((b) => b.key), ['2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']);
   assert.deepEqual([all[0].from, all[6].to, all[6].isPartial], ['2026-03-16', '2026-09-21', true]);
 });
 
 test('a hand-made period without `today` still works', () => {
-  const finished = { preset: 'custom', from: '2026-06-01', to: '2026-07-01', effTo: '2026-07-01', effDays: 30, granularity: 'week' };
+  const finished = { preset: 'custom', from: '2026-06-01', to: '2026-07-01', effTo: '2026-07-01', effDays: 30, granularity: 'week', statsStart: null };
   const buckets = buildBuckets(finished);
   assert.equal(buckets.length, 5);
   assert.equal(buckets.some((b) => b.isPartial || b.isFuture), false);
@@ -216,7 +219,7 @@ test('a hand-made period without `today` still works', () => {
 });
 
 test('bucketIndexer: ms and date strings, -1 outside', () => {
-  const indexOf = bucketIndexer(buildBuckets(resolvePeriod('thisYear', NOW)));
+  const indexOf = bucketIndexer(buildBuckets(resolve('thisYear', NOW)));
   assert.equal(indexOf(localMs('2026-06-15 10:00')), 5);
   assert.equal(indexOf('2026-06-15'), 5);
   assert.equal(indexOf(localMs('2026-01-01 00:00')), 0);
@@ -285,6 +288,6 @@ test('availability: before opening, after closing, full horizon, a Period as ran
   const custom6 = availability(september, NOW, { openHour: 9, closeHour: 17, workdays: [1, 2, 3, 4, 5, 6], horizon: 'full' });
   assert.equal(custom6.minutesPerResource, 26 * 480);
 
-  const period = resolvePeriod('thisMonth', NOW);
+  const period = resolve('thisMonth', NOW);
   assert.equal(availability(period, NOW).minutesPerResource, 10080, '`to` works like `toExcl`');
 });

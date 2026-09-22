@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import moment from 'moment';
 import { CalendarRange, Check, ChevronDown, X } from 'lucide-react';
 import { usePeriod } from '../context/AnalyticsContext.jsx';
+import { STATS_START_DATE } from '../data/constants.js';
+import { fmt } from '../format.js';
 import MenuPanel from './MenuPanel.jsx';
 import Segmented from './Segmented.jsx';
 
@@ -42,9 +44,13 @@ function CustomRangeForm({ period, selected, standalone, onApply, onClose }) {
   const complete = Boolean(from && to);
   const inverted = complete && from > to; // ISO dates sort as text
   const inFuture = (from && from > today) || (to && to > today);
+  // Nothing before the counted window is in the data, so such a range would show nothing.
+  const fromBeforeStart = Boolean(from) && from < STATS_START_DATE;
+  const toBeforeStart = Boolean(to) && to < STATS_START_DATE;
   let problem = null;
   if (inverted) problem = 'Start must be before end';
   else if (inFuture) problem = 'Dates cannot be after today';
+  else if (fromBeforeStart || toBeforeStart) problem = `Statistics start on ${fmt.date(STATS_START_DATE)}`;
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -77,8 +83,9 @@ function CustomRangeForm({ period, selected, standalone, onApply, onClose }) {
           aria-label="Start date"
           data-autofocus={standalone ? '' : undefined}
           value={from}
+          min={STATS_START_DATE}
           max={today}
-          aria-invalid={inverted || undefined}
+          aria-invalid={inverted || fromBeforeStart || undefined}
           onChange={(event) => setFrom(event.target.value)}
           className={DATE_INPUT_CLASS}
         />
@@ -86,8 +93,9 @@ function CustomRangeForm({ period, selected, standalone, onApply, onClose }) {
           type="date"
           aria-label="End date"
           value={to}
+          min={STATS_START_DATE}
           max={today}
-          aria-invalid={inverted || undefined}
+          aria-invalid={inverted || toBeforeStart || undefined}
           onChange={(event) => setTo(event.target.value)}
           className={DATE_INPUT_CLASS}
         />

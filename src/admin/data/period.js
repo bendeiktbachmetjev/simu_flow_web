@@ -3,7 +3,7 @@
 // step is calendar arithmetic — Vilnius DST days are 23/25 h long, so adding 86 400 000 ms
 // would drift.
 import moment from 'moment';
-import { OPEN_HOUR, CLOSE_HOUR, WORKDAYS } from './constants.js';
+import { OPEN_HOUR, CLOSE_HOUR, WORKDAYS, STATS_START_DATE } from './constants.js';
 
 export const PRESETS = [
   { id: 'thisMonth', label: 'This month' },
@@ -133,6 +133,34 @@ const rangeLabel = (from, toExcl) => {
 };
 
 // ---------------------------------------------------------------------------
+// The counted window — the ONE place that decides which days analytics count
+// ---------------------------------------------------------------------------
+// A local (Vilnius) calendar day counts when it is on or after STATS_START_DATE. Periods are
+// clamped with countedFrom(), rows are kept with isCountedDay() / isCountedMs(), and every
+// denominator starts at a clamped period start. A later rule that leaves out whole days
+// (summer months, say) goes into isCountedDay() and must then also be applied where open days
+// are enumerated (availability() and the rooms heatmap); countedFrom() only knows the start.
+//
+// Every `statsStart` option means: undefined → STATS_START_DATE, null → no floor (tests that pin
+// other rules on older fixture dates), 'YYYY-MM-DD' → that day.
+
+export const statsStartOf = (statsStart) => (statsStart === undefined ? STATS_START_DATE : statsStart || null);
+
+export const isCountedDay = (dayKey, statsStart) => {
+  const floor = statsStartOf(statsStart);
+  return !floor || dayKey >= floor;
+};
+
+// An instant belongs to its local day, like every other rule in this file.
+export const isCountedMs = (ms, statsStart) => Number.isFinite(ms) && isCountedDay(dayKeyOf(ms), statsStart);
+
+// The first counted day of a range that starts on `dayKey`.
+export const countedFrom = (dayKey, statsStart) => {
+  const floor = statsStartOf(statsStart);
+  return floor && dayKey < floor ? floor : dayKey;
+};
+
+// ---------------------------------------------------------------------------
 // Periods
 // ---------------------------------------------------------------------------
 
@@ -143,8 +171,14 @@ export const pickGranularity = (days) => {
 };
 
 // `today` is kept on the period so buckets and the comparison window can be derived
-// later without a clock.
-const makePeriod = ({ preset, offset, label, from, to }, today) => {
+// later without a clock. `statsStart` (already resolved: a day or null) clamps the start: a
+// period that begins before the counted window begins where it opens, and one that lies
+// wholly before it collapses to an empty range at its end. The period keeps the floor, so the
+// comparison window and the stepper obey the same one.
+const makePeriod = ({ preset, offset, label, from: presetFrom, to }, today, statsStart) => {
+  const floor = statsStartOf(statsStart);
+  const clamped = countedFrom(presetFrom, floor);
+  const from = clamped < to ? clamped : to;
   const tomorrow = addDays(today, 1);
   let effTo = to < tomorrow ? to : tomorrow;
   if (effTo < from) effTo = from; // period entirely in the future: nothing has elapsed
@@ -155,6 +189,8 @@ const makePeriod = ({ preset, offset, label, from, to }, today) => {
     label,
     from,
     to,
+    statsStart: floor,
+    startClamped: from !== presetFrom, // the preset itself starts earlier (a year cut at 1 Sep)
     fromMs: dateToMs(from),
     toMs: dateToMs(to),
     effTo,
@@ -163,8 +199,8 @@ const makePeriod = ({ preset, offset, label, from, to }, today) => {
     effDays: diffDays(from, effTo),
     isPartial: from <= today && today < to,
     isFuture: from > today,
-    // Buckets span the nominal period, so the nominal length picks their size
-    // (a year that is 20 days old still shows 12 month slots, not 365 day slots).
+    // Buckets span the nominal period [from, to), so its length picks their size (a year that
+    // is 20 days old still shows 12 month slots, not 365 day slots).
     granularity: pickGranularity(days),
     key: `${from}..${to}`,
     today,
@@ -194,9 +230,9 @@ const semesterIndexOf = (today) => {
   return year * 2; // Feb–Aug: Spring
 };
 
-export const resolvePeriod = (presetId, nowMs, options = {}) => {
-  const { custom = null, firstActivityMs = null } = options;
-  const offset = Number.isFinite(options.offset) ? Math.trunc(options.offset) : 0;
+// The calendar range a preset stands for, before the counted window is applied.
+// null = the choice is unusable and the default preset is used instead.
+const presetRange = (presetId, nowMs, { offset, custom, firstActivityMs, floor }) => {
   const today = dayKeyOf(nowMs);
   const now = parseKey(today);
   const year = now.getFullYear();
@@ -204,82 +240,96 @@ export const resolvePeriod = (presetId, nowMs, options = {}) => {
   switch (presetId) {
     case 'thisMonth': {
       const first = new Date(year, now.getMonth() + offset, 1);
-      return makePeriod({
+      return {
         preset: 'thisMonth',
         offset,
         label: `${MONTHS_LONG[first.getMonth()]} ${first.getFullYear()}`,
         from: toKey(first),
         to: firstOfMonth(first.getFullYear(), first.getMonth() + 1),
-      }, today);
+      };
     }
     case 'semester': {
       const sem = semesterRange(semesterIndexOf(today) + offset);
       const justEnded = offset === 0 && today >= sem.to;
-      return makePeriod({
+      return {
         preset: 'semester',
         offset,
         label: `${sem.autumn ? 'Autumn' : 'Spring'} ${sem.year}${justEnded ? ' (ended 30 Jun)' : ''}`,
         from: sem.from,
         to: sem.to,
-      }, today);
+      };
     }
     case 'academicYear': {
       const startYear = (now.getMonth() >= 8 ? year : year - 1) + offset;
-      return makePeriod({
+      return {
         preset: 'academicYear',
         offset,
         label: `${startYear}/${pad2((startYear + 1) % 100)}`,
         from: firstOfMonth(startYear, 8),
         to: firstOfMonth(startYear + 1, 8),
-      }, today);
+      };
     }
     case 'allTime': {
-      const firstDay = Number.isFinite(firstActivityMs) && firstActivityMs <= nowMs
-        ? dayKeyOf(firstActivityMs)
-        : firstOfMonth(year, 0);
-      return makePeriod({
-        preset: 'allTime',
-        offset: 0,
-        label: 'All time',
-        from: firstDay,
-        to: addDays(today, 1),
-      }, today);
+      // From the first recorded activity, never before the counted window (makePeriod clamps).
+      let firstDay = floor || firstOfMonth(year, 0);
+      if (Number.isFinite(firstActivityMs) && firstActivityMs <= nowMs) firstDay = dayKeyOf(firstActivityMs);
+      return { preset: 'allTime', offset: 0, label: 'All time', from: firstDay, to: addDays(today, 1) };
     }
     case 'custom': {
       const from = custom?.from;
       const to = custom?.to;
-      if (!isValidDateKey(from) || !isValidDateKey(to) || from > to) {
-        return resolvePeriod(DEFAULT_PRESET, nowMs, { firstActivityMs });
-      }
+      if (!isValidDateKey(from) || !isValidDateKey(to) || from > to) return null;
       const toExcl = addDays(to, 1);
-      return makePeriod({
+      if (floor && toExcl <= floor) return null; // nothing of it is counted
+      return {
         preset: 'custom',
         offset: 0,
-        label: dayRangeLabel(from, toExcl),
+        label: dayRangeLabel(countedFrom(from, floor), toExcl),
         from,
         to: toExcl,
-      }, today);
+      };
     }
     case 'thisYear': {
       const y = year + offset;
-      return makePeriod({
+      return {
         preset: 'thisYear',
         offset,
         label: String(y),
         from: firstOfMonth(y, 0),
         to: firstOfMonth(y + 1, 0),
-      }, today);
+      };
     }
     default:
-      return resolvePeriod(DEFAULT_PRESET, nowMs, { firstActivityMs });
+      return null;
   }
+};
+
+// options: { offset, custom: { from, to } (inclusive days), firstActivityMs, statsStart }
+export const resolvePeriod = (presetId, nowMs, options = {}) => {
+  const { custom = null, firstActivityMs = null } = options;
+  const offset = Number.isFinite(options.offset) ? Math.trunc(options.offset) : 0;
+  const floor = statsStartOf(options.statsStart);
+
+  const range = presetRange(presetId, nowMs, { offset, custom, firstActivityMs, floor });
+  if (!range) return resolvePeriod(DEFAULT_PRESET, nowMs, { firstActivityMs, statsStart: floor });
+
+  // An earlier step never lies wholly before the counted window (a stored offset can be older
+  // than the rule): move forward to the first one that has counted days.
+  if (floor && range.offset < 0 && range.to <= floor) {
+    return resolvePeriod(presetId, nowMs, { ...options, offset: range.offset + 1 });
+  }
+  return makePeriod(range, dayKeyOf(nowMs), floor);
 };
 
 // Equal-length window immediately before the ELAPSED part of the period.
 // Whole months compare with whole months; anything else with the same number of days.
+// The counted window of the period applies here too: a window wholly before it gives null
+// (shown like any missing comparison), one partly before it is cut and labelled by its dates.
 export const previousPeriod = (period) => {
   if (!period || period.preset === 'allTime' || period.effDays <= 0) return null;
   const { from, effTo } = period;
+  const floor = statsStartOf(period.statsStart);
+  if (floor && from <= floor) return null;
 
   let prevFrom;
   let compareLabel;
@@ -290,6 +340,10 @@ export const previousPeriod = (period) => {
     prevFrom = addDays(from, -period.effDays);
     compareLabel = period.effDays === 1 ? 'vs previous day' : `vs previous ${period.effDays} days`;
   }
+  if (floor && prevFrom < floor) {
+    prevFrom = floor;
+    compareLabel = `vs ${rangeLabel(prevFrom, from)}`;
+  }
 
   return {
     ...makePeriod({
@@ -298,18 +352,21 @@ export const previousPeriod = (period) => {
       label: rangeLabel(prevFrom, from),
       from: prevFrom,
       to: from,
-    }, todayOf(period)),
+    }, todayOf(period), floor),
     compareLabel,
   };
 };
 
-// Stepper rules: never forward past the current period, never back past the first activity.
+// Stepper rules: never forward past the current period, never back past the first activity,
+// never back into a period that ends before the counted window opens.
 export const canShiftPeriod = (period, nowMs, { firstActivityMs = null } = {}) => {
   if (!period || !SHIFTABLE_PRESETS.includes(period.preset)) return { prev: false, next: false };
   const next = period.offset < 0;
   if (!Number.isFinite(firstActivityMs)) return { prev: false, next };
-  const earlier = resolvePeriod(period.preset, nowMs, { offset: period.offset - 1 });
-  return { prev: earlier.toMs > firstActivityMs, next };
+  const target = period.offset - 1;
+  const earlier = resolvePeriod(period.preset, nowMs, { offset: target, statsStart: period.statsStart });
+  // resolvePeriod moves a step that would land wholly before the counted window forward again.
+  return { prev: earlier.offset === target && earlier.toMs > firstActivityMs, next };
 };
 
 export const shiftPeriod = (period, direction, nowMs, { firstActivityMs = null } = {}) => {
@@ -318,6 +375,7 @@ export const shiftPeriod = (period, direction, nowMs, { firstActivityMs = null }
   return resolvePeriod(period.preset, nowMs, {
     offset: period.offset + (direction < 0 ? -1 : 1),
     firstActivityMs,
+    statsStart: period.statsStart,
   });
 };
 

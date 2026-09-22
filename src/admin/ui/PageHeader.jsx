@@ -21,7 +21,8 @@ const defaultScopeLine = (university, period, prevPeriod) =>
  * "Vilnius University · 1 Jan – 20 Sep 2026 · compared with 13 Apr – 31 Dec 2025", built from
  * the admin and the selected period; pass a string to replace it. `counted` is the metric's
  * `{ clipped, fromLabel }`: when the period starts before the first recorded activity, the
- * header says from when things are counted. `note` is a permanent remark about the page.
+ * header says from when things are counted. Otherwise a preset cut at STATS_START_DATE (This
+ * year 2026) says so. `note` is a permanent remark about the page.
  * A <div>, not a <header>: the print rules hide every <header> inside the admin area.
  */
 export default function PageHeader({ title, question, scopeLine, note, counted }) {
@@ -41,10 +42,16 @@ export default function PageHeader({ title, question, scopeLine, note, counted }
       <h1 className="text-3xl font-extrabold tracking-tight text-[#414141]">{title}</h1>
       {question && <p className="mt-1 text-sm font-medium text-[#414141]/75">{question}</p>}
       {scope && <p className="mt-1 text-xs font-semibold text-[#414141]/60 print:hidden">{scope}</p>}
-      {counted?.clipped && counted.fromLabel && (
+      {counted?.clipped && counted.fromLabel ? (
         <p className="mt-1 text-xs font-semibold text-[#414141]/60">
           Counted from {counted.fromLabel}, when SimuFlow recording began.
         </p>
+      ) : (
+        period?.startClamped && (
+          <p className="mt-1 text-xs font-semibold text-[#414141]/60">
+            Statistics start on {fmt.date(period.from)}, when the center began regular operation.
+          </p>
+        )
       )}
       {note && <p className="mt-3 max-w-3xl text-xs font-semibold text-[#414141]/75">{note}</p>}
     </div>

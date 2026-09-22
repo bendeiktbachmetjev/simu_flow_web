@@ -6,6 +6,12 @@ import { shortName } from '../../../components/timeline/model.js';
 
 export const UNIVERSITY = 'Vilnius University';
 
+// Most fixtures below are dated June 2026, before STATS_START_DATE (1 Sep 2026). Tests that pin
+// other rules on them switch the counted-window floor off with this option — for
+// buildDataset(raw, ref, now, ALL_DAYS) and resolvePeriod(…, { ...ALL_DAYS }). The floor itself
+// is tested in statsStart.test.mjs.
+export const ALL_DAYS = { statsStart: null };
+
 // --- time helpers -----------------------------------------------------------------------
 // 'YYYY-MM-DD HH:mm' on the Vilnius wall clock → epoch ms / ISO string (UTC, like PostgREST).
 export const localMs = (wallClock) => moment(wallClock, 'YYYY-MM-DD HH:mm').valueOf();

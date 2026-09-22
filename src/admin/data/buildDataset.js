@@ -1,4 +1,5 @@
-// raw rows + Reference → the ONE cleaned dataset every metric reads.
+// raw rows + Reference → the ONE cleaned dataset every metric reads. Rows dated before the
+// counted window (STATS_START_DATE) are dropped first, so no metric has to know about it.
 // Pure apart from the running dataset id (used by the hooks as a cache key).
 import {
   SIM_FALLBACK_MEDIAN_MIN,
@@ -8,7 +9,7 @@ import {
   VISIT_MAX_MIN,
   VISIT_MIN_MIN,
 } from './constants.js';
-import { toMs, dayKeyOf } from './period.js';
+import { dateToMs, dayKeyOf, isCountedDay, statsStartOf, toMs } from './period.js';
 import {
   affiliationKey,
   countryKey,
@@ -48,7 +49,43 @@ const buildGuestRegs = (rows) => {
   return regs;
 };
 
-export const buildDataset = (raw, ref, nowMs) => {
+// The day a raw row belongs to — a visit to its tap-in, a session to its start, a class to its
+// date, an event to its start, a guest registration to its sign-in — the same days the metrics
+// count them on. null = no usable date.
+const dayOfInstant = (value) => {
+  const ms = toMs(value);
+  return Number.isFinite(ms) ? dayKeyOf(ms) : null;
+};
+const DAY_OF_ROW = {
+  centerSessions: (row) => dayOfInstant(row.entry_time),
+  simSessions: (row) => dayOfInstant(row.start_time),
+  schedules: (row) => (row.session_date ? String(row.session_date).slice(0, 10) : null),
+  events: (row) => dayOfInstant(row.starts_at),
+  guests: (row) => dayOfInstant(row.created_at),
+};
+
+// Rows dated before the counted window (STATS_START_DATE, see period.js) are split off here,
+// once, before any cleaning — so baselines, class evidence and every metric only ever see
+// counted days. Rows without a usable date stay: the cleaning steps count and drop them.
+const splitAtStart = (raw, statsStart) => {
+  const counted = {};
+  const before = {};
+  Object.entries(DAY_OF_ROW).forEach(([table, dayOf]) => {
+    counted[table] = [];
+    before[table] = [];
+    (raw?.[table] || []).forEach((row) => {
+      const day = row ? dayOf(row) : null;
+      if (day !== null && !isCountedDay(day, statsStart)) before[table].push(row);
+      else counted[table].push(row);
+    });
+  });
+  return { counted, before };
+};
+
+// options.statsStart: see period.js (undefined → STATS_START_DATE, null → every day counts).
+export const buildDataset = (rawInput, ref, nowMs, options = {}) => {
+  const statsStart = statsStartOf(options.statsStart);
+  const { counted: raw, before } = splitAtStart(rawInput, statsStart); // `raw` = counted rows only
   const roleByUserId = ref?.roleByUserId || new Map();
 
   // center_sessions has no university column: a row counts when its user is in one of the
@@ -56,7 +93,7 @@ export const buildDataset = (raw, ref, nowMs) => {
   // enters a total.
   const knownRows = [];
   const unknownRows = [];
-  (raw?.centerSessions || []).forEach((row) => {
+  (raw.centerSessions || []).forEach((row) => {
     if (row && roleByUserId.has(row.user_id)) knownRows.push(row);
     else if (row) unknownRows.push(row);
   });
@@ -73,7 +110,7 @@ export const buildDataset = (raw, ref, nowMs) => {
   const { visits: unattributedVisits } = cleanVisits(unknownRows, visitOptions);
 
   const simulatorById = ref?.simulatorById || new Map();
-  const scopedSimRows = (raw?.simSessions || []).filter((row) => row && simulatorById.has(row.simulator_id));
+  const scopedSimRows = (raw.simSessions || []).filter((row) => row && simulatorById.has(row.simulator_id));
   const simBaseline = computeBaseline(scopedSimRows, {
     getStart: (row) => row.start_time,
     getEnd: (row) => row.end_time,
@@ -81,7 +118,7 @@ export const buildDataset = (raw, ref, nowMs) => {
     maxMin: SIM_MAX_MIN,
     fallbackMin: SIM_FALLBACK_MEDIAN_MIN,
   });
-  const { sessions: simSessions, stats: simStats } = cleanSimSessions(raw?.simSessions || [], {
+  const { sessions: simSessions, stats: simStats } = cleanSimSessions(raw.simSessions || [], {
     nowMs,
     simulatorById,
     medianMin: simBaseline.medianMin,
@@ -89,8 +126,8 @@ export const buildDataset = (raw, ref, nowMs) => {
   });
 
   const evidence = { visits, simSessions, ref, nowMs };
-  const classes = inferClassStatus(buildClasses(raw?.schedules, ref), evidence);
-  const events = inferEventStatus(buildEvents(raw?.events, ref), evidence);
+  const classes = inferClassStatus(buildClasses(raw.schedules, ref), evidence);
+  const events = inferEventStatus(buildEvents(raw.events, ref), evidence);
   const { bookingSegs, removedSimRefs, unlistedRoomRefs } = buildBookingSegs(classes, events, ref);
 
   // First / last recorded activity. Classes count once they have started — a class planned
@@ -107,6 +144,17 @@ export const buildDataset = (raw, ref, nowMs) => {
   classes.forEach((item) => {
     if (item.startMs <= nowMs) note(item.startMs);
   });
+  // Rows before the counted window never count, but they show that SimuFlow was already
+  // recording when it opened: then every denominator starts on its first day, even if nobody
+  // tapped in on that day. (lastActivityMs stays the last COUNTED activity, null if none.)
+  const recordedBefore =
+    before.centerSessions.some((row) => roleByUserId.has(row.user_id)) ||
+    before.simSessions.some((row) => simulatorById.has(row.simulator_id)) ||
+    before.schedules.length > 0;
+  if (statsStart && recordedBefore) {
+    const startMs = dateToMs(statsStart);
+    if (firstActivityMs === null || startMs < firstActivityMs) firstActivityMs = startMs;
+  }
 
   lastDatasetId += 1;
   return {
@@ -122,7 +170,7 @@ export const buildDataset = (raw, ref, nowMs) => {
     classes,
     events,
     bookingSegs,
-    guestRegs: buildGuestRegs(raw?.guests),
+    guestRegs: buildGuestRegs(raw.guests),
     baselines: {
       visitMedianMin: visitBaseline.medianMin,
       visitSample: visitBaseline.sampleSize,
@@ -135,7 +183,10 @@ export const buildDataset = (raw, ref, nowMs) => {
       removedSimRefs,
       unlistedRoomRefs,
       shortTapMs, // when the ignored accidental taps happened, so a period can count its own
+      // Raw rows per table dated before the counted window: dropped, never cleaned or counted.
+      beforeStart: Object.fromEntries(Object.entries(before).map(([table, rows]) => [table, rows.length])),
     },
+    statsStart,
     firstActivityMs,
     lastActivityMs,
   };

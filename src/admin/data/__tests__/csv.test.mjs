@@ -86,11 +86,12 @@ test('csvFilename: section, table and the INCLUSIVE last day', () => {
   const now = localMs('2026-09-20 13:30');
   assert.equal(
     csvFilename('students', 'students_by_year', resolvePeriod('thisYear', now)),
-    'simuflow_students_students_by_year_2026-01-01_2026-12-31.csv'
+    'simuflow_students_students_by_year_2026-09-01_2026-12-31.csv',
+    'This year 2026 starts where the statistics start'
   );
   assert.equal(
-    csvFilename('Overview', 'summary', resolvePeriod('custom', now, { custom: { from: '2026-07-06', to: '2026-08-19' } })),
-    'simuflow_overview_summary_2026-07-06_2026-08-19.csv'
+    csvFilename('Overview', 'summary', resolvePeriod('custom', now, { custom: { from: '2026-09-07', to: '2026-09-18' } })),
+    'simuflow_overview_summary_2026-09-07_2026-09-18.csv'
   );
   assert.equal(
     csvFilename('rooms', 'rooms', { from: '2026-02-01', to: '2026-03-01' }),

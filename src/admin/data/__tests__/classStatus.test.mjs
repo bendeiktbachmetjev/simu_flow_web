@@ -6,7 +6,7 @@ import { cleanVisits } from '../clean/visits.js';
 import { cleanSimSessions } from '../clean/simSessions.js';
 import { buildDataset } from '../buildDataset.js';
 import {
-  makeRef, makeRaw, centerSession, simSession, schedule, eventCode, guestReg, localMs,
+  makeRef, makeRaw, centerSession, simSession, schedule, eventCode, guestReg, localMs, ALL_DAYS,
 } from './fixtures.mjs';
 
 const ref = makeRef();
@@ -193,14 +193,15 @@ test('buildDataset: exact Dataset shape, scoping and baselines', () => {
       guestReg('', null, '2026-06-17 09:00'),
     ],
   });
-  const ds = buildDataset(raw, ref, NOW);
+  const ds = buildDataset(raw, ref, NOW, ALL_DAYS); // June rows: the counted-window floor is off
 
   assert.deepEqual(Object.keys(ds).sort(), [
     'baselines', 'bookingSegs', 'classes', 'events', 'firstActivityMs', 'guestRegs', 'id', 'lastActivityMs',
-    'nowMs', 'quality', 'simSessions', 'unattributed', 'visits',
+    'nowMs', 'quality', 'simSessions', 'statsStart', 'unattributed', 'visits',
   ]);
   assert.equal(ds.nowMs, NOW);
-  assert.equal(buildDataset(raw, ref, NOW).id, ds.id + 1, 'ids increase');
+  assert.equal(ds.statsStart, null);
+  assert.equal(buildDataset(raw, ref, NOW, ALL_DAYS).id, ds.id + 1, 'ids increase');
 
   assert.deepEqual(ds.visits.map((v) => [v.userId, v.role]), [['t1', 'teacher'], ['s1', 'student']]);
   assert.equal(ds.unattributed.visits, 1);
@@ -209,7 +210,10 @@ test('buildDataset: exact Dataset shape, scoping and baselines', () => {
   assert.equal(ds.simSessions.length, 1, 'sessions of foreign simulators are out of scope');
 
   assert.deepEqual(ds.baselines, { visitMedianMin: 120, visitSample: 2, simMedianMin: 20, simSample: 1 });
-  assert.deepEqual(Object.keys(ds.quality).sort(), ['removedSimRefs', 'shortTapMs', 'simSessions', 'unlistedRoomRefs', 'visits']);
+  assert.deepEqual(Object.keys(ds.quality).sort(), [
+    'beforeStart', 'removedSimRefs', 'shortTapMs', 'simSessions', 'unlistedRoomRefs', 'visits',
+  ]);
+  assert.deepEqual(ds.quality.beforeStart, { centerSessions: 0, simSessions: 0, schedules: 0, events: 0, guests: 0 });
   assert.deepEqual(ds.quality.visits, { raw: 3, invalid: 0, short: 1, merged: 0, imputed: 0, capped: 0, open: 0 });
   assert.deepEqual(ds.quality.shortTapMs, [localMs('2026-06-14 09:00')], 'only taps of known users');
   assert.equal(ds.quality.simSessions.outOfScope, 1);
@@ -248,4 +252,5 @@ test('buildDataset: empty input gives an empty, well-formed dataset', () => {
   assert.deepEqual(ds.baselines, { visitMedianMin: 120, visitSample: 0, simMedianMin: 20, simSample: 0 });
   assert.equal(ds.firstActivityMs, null);
   assert.equal(ds.lastActivityMs, null);
+  assert.equal(ds.statsStart, '2026-09-01', 'the counted window is on by default');
 });
