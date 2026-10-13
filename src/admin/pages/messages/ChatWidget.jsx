@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageCircle, MessageSquare, X } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Maximize2, MessageCircle, MessageSquare, Minimize2, X } from 'lucide-react';
 import { EmptyState, LiveDot } from '../../ui';
 import { useAdmin } from '../../context/AdminContext.jsx';
 import { useSupport } from '../../context/SupportContext.jsx';
@@ -32,8 +33,19 @@ const storeSelected = (adminId, clientId) => {
   }
 };
 
-// Old bookmarks of the former Messages section open the panel (the shell redirects the path).
-const openedFromOldLink = () => /^\/admin\/messages\/?$/i.test(window.location.pathname);
+// Old bookmarks of the former Messages page open the chat full size, as that page was (the
+// shell redirects the path to Overview).
+const OLD_PAGE = /^\/admin\/messages\/?$/i;
+const openedFromOldLink = () => OLD_PAGE.test(window.location.pathname);
+
+// Small: a window above the bottom-right button (full screen on phones). Expanded: the whole
+// area under the site header, like a page of its own.
+const SMALL_FRAME =
+  'fixed z-30 inset-0 sm:inset-auto sm:right-6 sm:bottom-24 sm:w-[min(900px,calc(100vw-3rem))] sm:h-[min(680px,calc(100dvh-8rem))]';
+const EXPANDED_FRAME = 'fixed z-30 inset-x-0 bottom-0 top-16 bg-[#FFFFFF] sm:px-6 sm:py-6';
+const CARD =
+  'h-full flex flex-col bg-[#FFFFFF] sm:rounded-[24px] border border-[#DCDCDC]/60 shadow-[0_16px_40px_rgba(65,65,65,0.18)] overflow-hidden';
+const ROUND_BUTTON = `w-9 h-9 rounded-full flex items-center justify-center text-[#414141]/70 hover:bg-[#DCDCDC]/30 transition-colors ${RING}`;
 
 function useNow(tickMs) {
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -60,6 +72,8 @@ function WaitingBadge({ count }) {
  * Support chat as a floating button in the bottom-right corner of every admin screen. The panel
  * opens above the page and stays open while the admin moves between sections: conversations on
  * the left, the open one on the right; on narrow screens one pane at a time, full screen.
+ * The expand button in its header makes it fill the area under the site header; moving to another
+ * section shrinks it back, so the page that was asked for is visible.
  * The data comes from SupportProvider (mounted in the shell), so the badge and the panel never
  * disagree. z-index stays at 30: the calendar tooltip (50) and the event modal (60) stay on top.
  */
@@ -70,6 +84,7 @@ export default function ChatWidget() {
   const nowMs = useNow(CLOCK_TICK_MS);
 
   const [open, setOpen] = useState(openedFromOldLink);
+  const [expanded, setExpanded] = useState(openedFromOldLink);
   const [selectedId, setSelectedId] = useState(() => readSelected(adminId));
   const draftsRef = useRef(new Map()); // unsent text per conversation, in memory only
   const panelRef = useRef(null);
@@ -94,6 +109,21 @@ export default function ChatWidget() {
     if (open) panelRef.current?.focus();
   }, [open]);
 
+  // A click on a section in the header while the chat fills the screen: shrink it, so the page
+  // shows. The redirect away from an old /admin/messages link is not such a click.
+  const { pathname } = useLocation();
+  const previousPath = useRef(pathname);
+  useEffect(() => {
+    const previous = previousPath.current;
+    previousPath.current = pathname;
+    if (previous !== pathname && !OLD_PAGE.test(previous)) setExpanded(false);
+  }, [pathname]);
+
+  const close = () => {
+    setOpen(false);
+    setExpanded(false);
+  };
+
   const clientId = thread?.clientId ?? null;
   const onDraftChange = useCallback(
     (text) => {
@@ -115,66 +145,82 @@ export default function ChatWidget() {
           tabIndex={-1}
           role="dialog"
           aria-label="Messages"
-          className="fixed z-30 inset-0 sm:inset-auto sm:right-6 sm:bottom-24 sm:w-[min(900px,calc(100vw-3rem))] sm:h-[min(680px,calc(100dvh-8rem))] flex flex-col bg-[#FFFFFF] sm:rounded-[24px] border border-[#DCDCDC]/60 shadow-[0_16px_40px_rgba(65,65,65,0.18)] overflow-hidden focus:outline-none"
+          className={`${expanded ? EXPANDED_FRAME : SMALL_FRAME} focus:outline-none`}
         >
-          <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-[#DCDCDC]/60">
-            <div className="min-w-0">
-              <h2 className="text-base font-extrabold text-[#414141]">Messages</h2>
-              {support.status !== 'error' && (
-                <p className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#414141]/60">
-                  <LiveDot active={support.live} />
-                  {support.live ? 'Live' : 'Checking every 30 seconds'}
-                </p>
-              )}
+          <div className={expanded ? `max-w-7xl mx-auto ${CARD}` : CARD}>
+            <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-[#DCDCDC]/60">
+              <div className="min-w-0">
+                <h2 className="text-base font-extrabold text-[#414141]">Messages</h2>
+                {support.status !== 'error' && (
+                  <p className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#414141]/60">
+                    <LiveDot active={support.live} />
+                    {support.live ? 'Live' : 'Checking every 30 seconds'}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setExpanded((value) => !value)}
+                  aria-label={expanded ? 'Make the chat window small' : 'Open the chat full size'}
+                  title={expanded ? 'Small window' : 'Full size'}
+                  className={`hidden sm:flex ${ROUND_BUTTON}`}
+                >
+                  {expanded ? (
+                    <Minimize2 className="w-[18px] h-[18px]" aria-hidden="true" />
+                  ) : (
+                    <Maximize2 className="w-[18px] h-[18px]" aria-hidden="true" />
+                  )}
+                </button>
+                <button type="button" onClick={close} aria-label="Close messages" title="Close" className={ROUND_BUTTON}>
+                  <X className="w-5 h-5" aria-hidden="true" />
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close messages"
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-[#414141]/70 hover:bg-[#DCDCDC]/30 transition-colors ${RING}`}
-            >
-              <X className="w-5 h-5" aria-hidden="true" />
-            </button>
-          </div>
 
-          <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)]">
-            <div className={`${thread ? 'hidden md:flex' : 'flex'} min-h-0 flex-col md:border-r md:border-[#DCDCDC]/60`}>
-              <ThreadList
-                threads={support.threads}
-                status={support.status}
-                error={support.error}
-                isStale={support.isStale}
-                updatedAt={support.updatedAt}
-                selectedId={clientId}
-                onSelect={select}
-                onRetry={support.refresh}
-                nowMs={nowMs}
-                adminId={adminId}
-              />
-            </div>
-            <div className={`${thread ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-col`}>
-              {thread ? (
-                <Conversation
-                  key={thread.clientId}
-                  thread={thread}
-                  adminId={adminId}
+            <div
+              className={`flex-1 min-h-0 grid grid-cols-1 ${
+                expanded ? 'md:grid-cols-[360px_minmax(0,1fr)]' : 'md:grid-cols-[320px_minmax(0,1fr)]'
+              }`}
+            >
+              <div className={`${thread ? 'hidden md:flex' : 'flex'} min-h-0 flex-col md:border-r md:border-[#DCDCDC]/60`}>
+                <ThreadList
+                  threads={support.threads}
+                  status={support.status}
+                  error={support.error}
+                  isStale={support.isStale}
+                  updatedAt={support.updatedAt}
+                  selectedId={clientId}
+                  onSelect={select}
+                  onRetry={support.refresh}
                   nowMs={nowMs}
-                  onBack={() => select(null)}
-                  draft={draftsRef.current.get(thread.clientId) ?? ''}
-                  onDraftChange={onDraftChange}
+                  adminId={adminId}
                 />
-              ) : (
-                <EmptyState
-                  icon={MessageSquare}
-                  title={support.threads.length > 0 ? 'Choose a conversation' : 'No conversation open'}
-                  hint={
-                    support.threads.length > 0
-                      ? 'Pick a person on the left to read the messages and reply.'
-                      : 'Conversations appear here as soon as someone writes to support.'
-                  }
-                  className="flex-1"
-                />
-              )}
+              </div>
+              <div className={`${thread ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-col`}>
+                {thread ? (
+                  <Conversation
+                    key={thread.clientId}
+                    thread={thread}
+                    adminId={adminId}
+                    nowMs={nowMs}
+                    onBack={() => select(null)}
+                    draft={draftsRef.current.get(thread.clientId) ?? ''}
+                    onDraftChange={onDraftChange}
+                  />
+                ) : (
+                  <EmptyState
+                    icon={MessageSquare}
+                    title={support.threads.length > 0 ? 'Choose a conversation' : 'No conversation open'}
+                    hint={
+                      support.threads.length > 0
+                        ? 'Pick a person on the left to read the messages and reply.'
+                        : 'Conversations appear here as soon as someone writes to support.'
+                    }
+                    className="flex-1"
+                  />
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -182,10 +228,10 @@ export default function ChatWidget() {
 
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => (open ? close() : setOpen(true))}
         aria-label={open ? 'Close messages' : buttonLabel}
         aria-expanded={open}
-        className={`${open ? 'hidden sm:flex' : 'flex'} fixed z-30 right-6 bottom-6 w-14 h-14 rounded-full items-center justify-center bg-gradient-to-br from-[#78003F] to-[#E64164] text-white shadow-[0_8px_24px_rgba(120,0,63,0.35)] hover:shadow-[0_10px_28px_rgba(120,0,63,0.45)] transition-shadow print:hidden ${RING}`}
+        className={`${open && expanded ? 'hidden' : open ? 'hidden sm:flex' : 'flex'} fixed z-30 right-6 bottom-6 w-14 h-14 rounded-full items-center justify-center bg-gradient-to-br from-[#78003F] to-[#E64164] text-white shadow-[0_8px_24px_rgba(120,0,63,0.35)] hover:shadow-[0_10px_28px_rgba(120,0,63,0.45)] transition-shadow print:hidden ${RING}`}
       >
         {open ? <X className="w-6 h-6" aria-hidden="true" /> : <MessageCircle className="w-6 h-6" aria-hidden="true" />}
         {!open && <WaitingBadge count={waiting} />}
