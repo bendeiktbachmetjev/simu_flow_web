@@ -138,7 +138,7 @@ export function subscribeToMessages({ onInsert, onStatus }) {
   };
 }
 
-// The data source the Messages section runs on; the dev demo (dev/demoSupport.js) has the same shape.
+// The data source the chat panel runs on; the dev demo (dev/demoSupport.js) has the same shape.
 export const liveSupport = {
   loadThreads,
   loadMessages,

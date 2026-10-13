@@ -1,5 +1,5 @@
-// Support chat threads for the whole admin area: mounted once in the shell, so the "Messages"
-// pill can show how many people wait for a reply on every page, and the Messages page reuses the
+// Support chat threads for the whole admin area: mounted once in the shell, so the floating chat
+// button can show how many people wait for a reply on every page, and its panel reuses the
 // same list and the same realtime channel. Only the threads view is read here (one row per
 // conversation); the messages of a conversation are read when it is opened (useConversation).
 //

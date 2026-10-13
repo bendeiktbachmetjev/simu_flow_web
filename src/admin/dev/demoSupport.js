@@ -1,4 +1,4 @@
-// Generated support chat for the dev-only demo mode (see ./demo.js). The Messages section loads
+// Generated support chat for the dev-only demo mode (see ./demo.js). The chat panel loads
 // this file with a dynamic import behind `import.meta.env.DEV`, so it never reaches a production
 // bundle, and in demo nothing is read from or written to Supabase.
 //

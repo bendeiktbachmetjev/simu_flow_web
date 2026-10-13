@@ -4,7 +4,6 @@ import { LogOut } from 'lucide-react';
 import appIcon from '../assets/app-icon.png';
 import { useAdmin } from './context/AdminContext';
 import { useAnalytics } from './context/AnalyticsContext';
-import { useSupport } from './context/SupportContext';
 import { SECTIONS } from './nav';
 
 const RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78003F]/40';
@@ -13,38 +12,16 @@ const PILL_BASE = `shrink-0 whitespace-nowrap px-3.5 py-1.5 rounded-full text-[1
 const PILL_ACTIVE = 'bg-[#78003F] text-white';
 const PILL_IDLE = 'text-[#414141]/70 hover:bg-[#DCDCDC]/20';
 
-// The analytics sections stand a little apart from the two "home" sections and from Messages.
-const GAP_AFTER = new Set(['calendar', 'guests']);
-
-// Number of people waiting for a reply, on the "Messages" pill. Hidden at 0.
-function WaitingBadge({ count, active }) {
-  return (
-    <>
-      <span
-        aria-hidden="true"
-        className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-bold leading-none ${
-          active ? 'bg-[#FFFFFF] text-[#78003F]' : 'bg-[#E64164] text-white'
-        }`}
-      >
-        {count > 99 ? '99+' : count}
-      </span>
-      <span className="sr-only">{`, ${count} waiting for a reply`}</span>
-    </>
-  );
-}
-
 // Sticky glass header. It is the only element of the admin area with backdrop-blur and it is a
 // sibling of <main>, never an ancestor of the calendar (a blurred ancestor would misplace the
 // calendar's position: fixed tooltip). z-10 keeps it below that tooltip (50) and the event modal (60).
 export default function AdminHeader() {
   const { admin, signOut, isDemo } = useAdmin();
   const { isRefetching } = useAnalytics();
-  const { waitingCount } = useSupport();
   const { pathname } = useLocation();
   const navRef = useRef(null);
 
-  // On narrow screens the pills scroll sideways: keep the active one in view after a navigation
-  // (and when the Messages badge appears or changes, which makes that pill wider).
+  // On narrow screens the pills scroll sideways: keep the active one in view after a navigation.
   useEffect(() => {
     const nav = navRef.current;
     const active = nav?.querySelector('[aria-current="page"]');
@@ -53,7 +30,7 @@ export default function AdminHeader() {
     const right = left + active.offsetWidth;
     if (left < nav.scrollLeft) nav.scrollLeft = left - 8;
     else if (right > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = right - nav.clientWidth + 8;
-  }, [pathname, waitingCount]);
+  }, [pathname]);
 
   return (
     <header className="bg-[#FFFFFF]/80 backdrop-blur border-b border-[#DCDCDC]/60 shadow-sm sticky top-0 z-10">
@@ -76,27 +53,15 @@ export default function AdminHeader() {
             fit — so on narrow screens the row starts at the left edge and scrolls sideways. */}
         <nav ref={navRef} aria-label="Sections" className="sf-nav-scroll relative flex-1 min-w-0 flex overflow-x-auto">
           <div className="mx-auto flex items-center gap-1 p-1">
-            {SECTIONS.map((section, index) => {
-              const afterGap = index > 0 && GAP_AFTER.has(SECTIONS[index - 1].id);
-              return (
-                <NavLink
-                  key={section.id}
-                  to={section.path}
-                  className={({ isActive }) =>
-                    `${PILL_BASE} ${isActive ? PILL_ACTIVE : PILL_IDLE}${afterGap ? ' ml-4' : ''}`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {section.label}
-                      {section.id === 'messages' && waitingCount > 0 && (
-                        <WaitingBadge count={waitingCount} active={isActive} />
-                      )}
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
+            {SECTIONS.map((section) => (
+              <NavLink
+                key={section.id}
+                to={section.path}
+                className={({ isActive }) => `${PILL_BASE} ${isActive ? PILL_ACTIVE : PILL_IDLE}`}
+              >
+                {section.label}
+              </NavLink>
+            ))}
           </div>
         </nav>
 

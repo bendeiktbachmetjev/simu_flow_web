@@ -16,7 +16,7 @@ import ClassesPage from './pages/ClassesPage';
 import SimulatorsPage from './pages/SimulatorsPage';
 import RoomsPage from './pages/RoomsPage';
 import GuestsPage from './pages/GuestsPage';
-import MessagesPage from './pages/MessagesPage';
+import ChatWidget from './pages/messages/ChatWidget';
 
 const RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78003F]/40';
 
@@ -59,7 +59,7 @@ class PageErrorBoundary extends React.Component {
 }
 
 // Data the whole admin area shares: the analytics for the pages, and the support chat threads
-// for the "Messages" pill and page (one realtime channel for both).
+// for the floating chat button and its panel (one realtime channel for both).
 function ShellProviders({ children }) {
   return (
     <AnalyticsProvider>
@@ -132,7 +132,6 @@ export default function AdminShell() {
                 <Route path="simulators" element={<SimulatorsPage />} />
                 <Route path="rooms" element={<RoomsPage />} />
                 <Route path="guests" element={<GuestsPage />} />
-                <Route path="messages" element={<MessagesPage />} />
                 <Route path="calendar" element={null} />
                 <Route path="*" element={<Navigate to="/admin/overview" replace />} />
               </Routes>
@@ -144,6 +143,8 @@ export default function AdminShell() {
             </div>
           )}
         </main>
+        {/* A sibling of <main>, never an ancestor of the calendar; it stays open across sections. */}
+        {!printing && <ChatWidget />}
         {printing && (
           <div
             role="status"
