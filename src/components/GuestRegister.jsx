@@ -203,6 +203,33 @@ const COUNTRIES = [
 
 const COUNTRY_SET = new Set(COUNTRIES.map((c) => c.toLowerCase()));
 
+// The "Information for registrants" text the guest confirms. The version is
+// saved with the registration (guests.notice_version); the database stamps the
+// time itself (migration 042). It is the same notice and version as in the
+// app, so change the text and the version there and here together.
+const REGISTRANT_NOTICE_VERSION = '2026-10-13';
+
+const REGISTRANT_NOTICE = {
+  en: {
+    toggle: 'Lietuviškai',
+    title: 'Information for registrants',
+    data: 'The personal data you provide when registering is processed to register participants and to organise and keep records of activities. The data controller is Vilnius University. The data is processed in accordance with the General Data Protection Regulation and other applicable laws.',
+    photo: 'Activities may be photographed and filmed. Photos and videos may be used to document the project, to report on it and to publicise it.',
+    more: 'More about how personal data is processed',
+    href: '/privacy?lang=en',
+    checkbox: 'I have read this information',
+  },
+  lt: {
+    toggle: 'English',
+    title: 'Informacija besiregistruojantiems',
+    data: 'Registracijos metu pateikti asmens duomenys tvarkomi dalyvių registracijos, veiklų organizavimo ir apskaitos tikslais. Asmens duomenų valdytojas – Vilniaus universitetas. Duomenys tvarkomi vadovaujantis Bendruoju duomenų apsaugos reglamentu ir kitais galiojančiais teisės aktais.',
+    photo: 'Veiklų metu gali būti fotografuojama ir filmuojama. Vaizdo medžiaga gali būti naudojama projekto dokumentavimo, atsiskaitymo ir viešinimo tikslais.',
+    more: 'Išsamiau apie asmens duomenų tvarkymą',
+    href: '/privacy?lang=lt',
+    checkbox: 'Susipažinau su pateikta informacija',
+  },
+};
+
 export default function GuestRegister() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -211,12 +238,15 @@ export default function GuestRegister() {
     email: '',
     country: '',
     affiliation: '',
+    noticeAccepted: false,
     termsAccepted: false,
     marketingOptIn: false,
   });
+  const [noticeLang, setNoticeLang] = useState('en');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const notice = REGISTRANT_NOTICE[noticeLang];
 
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
@@ -229,6 +259,10 @@ export default function GuestRegister() {
     setError(null);
 
     try {
+      if (!form.noticeAccepted) {
+        throw new Error('Please tick the box to confirm that you have read the information.');
+      }
+
       if (!form.termsAccepted) {
         throw new Error('You must agree to the Terms to continue.');
       }
@@ -248,6 +282,7 @@ export default function GuestRegister() {
           affiliation: form.affiliation.trim(),
           terms_accepted: true,
           marketing_opt_in: form.marketingOptIn,
+          notice_version: REGISTRANT_NOTICE_VERSION,
         }]);
 
       if (insertError) throw insertError;
@@ -395,6 +430,53 @@ export default function GuestRegister() {
                 placeholder="Institute or organization"
                 className="w-full px-4 py-3 rounded-[16px] border border-transparent bg-[#DCDCDC]/40 text-[#414141] font-medium placeholder:text-[#414141]/40 focus:outline-none focus:ring-2 focus:ring-[#78003F] focus:bg-[#DCDCDC]/30 transition-all"
               />
+            </div>
+
+            <div
+              lang={noticeLang}
+              className="bg-[#DCDCDC]/20 rounded-[16px] border border-[#DCDCDC]/60 p-4 space-y-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-sm font-extrabold text-[#414141] pt-1">
+                  {notice.title}
+                </h3>
+                <button
+                  type="button"
+                  lang={noticeLang === 'en' ? 'lt' : 'en'}
+                  onClick={() => setNoticeLang(noticeLang === 'en' ? 'lt' : 'en')}
+                  className="shrink-0 px-3 py-1 rounded-full border border-[#DCDCDC] bg-[#FFFFFF] text-xs font-bold text-[#78003F] hover:border-[#78003F]/40 transition-colors"
+                >
+                  {notice.toggle}
+                </button>
+              </div>
+              <p className="text-sm font-medium text-[#414141]/80 leading-relaxed">
+                {notice.data}
+              </p>
+              <p className="text-sm font-medium text-[#414141]/80 leading-relaxed">
+                {notice.photo}
+              </p>
+              <a
+                href={notice.href}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block text-sm font-semibold text-[#78003F] hover:underline"
+              >
+                {notice.more}
+              </a>
+
+              <label className="flex items-start gap-3 select-none pt-1">
+                <input
+                  type="checkbox"
+                  name="noticeAccepted"
+                  checked={form.noticeAccepted}
+                  onChange={handleChange}
+                  className="mt-1 h-5 w-5 rounded border-[#DCDCDC] text-[#78003F] focus:ring-[#78003F]"
+                  required
+                />
+                <span className="text-sm font-semibold text-[#414141]/90 leading-relaxed">
+                  {notice.checkbox}
+                </span>
+              </label>
             </div>
 
             <div className="space-y-3 pt-1">

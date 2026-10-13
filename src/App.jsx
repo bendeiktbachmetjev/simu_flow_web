@@ -4,7 +4,7 @@ import AdminRoute from './admin/AdminRoute';
 import Login from './components/Login';
 import GuestRegister from './components/GuestRegister';
 import Landing from './components/Landing';
-import PrivacyPolicy from './components/PrivacyPolicy';
+import PrivacyNotice from './components/PrivacyNotice';
 import TermsOfUse from './components/TermsOfUse';
 import ResetPassword from './components/ResetPassword';
 
@@ -13,7 +13,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/privacy" element={<PrivacyNotice />} />
         <Route path="/terms" element={<TermsOfUse />} />
         <Route path="/admin/*" element={<AdminRoute />} />
         <Route path="/guest/register" element={<GuestRegister />} />
