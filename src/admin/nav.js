@@ -8,6 +8,7 @@ export const SECTIONS = [
   { id: 'simulators', label: 'Simulators', path: '/admin/simulators', usesPeriod: true },
   { id: 'rooms', label: 'Rooms', path: '/admin/rooms', usesPeriod: true },
   { id: 'guests', label: 'Guests', path: '/admin/guests', usesPeriod: true },
+  { id: 'messages', label: 'Messages', path: '/admin/messages', usesPeriod: false },
 ];
 
 export const DEFAULT_SECTION = 'overview';

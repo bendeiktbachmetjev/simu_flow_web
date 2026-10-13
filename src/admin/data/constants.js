@@ -44,6 +44,7 @@ export const STORAGE = {
   period: 'simuflow.admin.period',
   lastSection: 'simuflow.admin.lastSection',
   returnTo: 'simuflow.admin.returnTo', // sessionStorage
+  supportThread: 'simuflow.admin.supportThread', // sessionStorage: the open Messages conversation
   demo: 'simuflow.admin.demo', // dev server only
 };
 

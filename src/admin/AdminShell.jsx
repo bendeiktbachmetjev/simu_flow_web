@@ -6,6 +6,7 @@ import SimulatorTimeline from '../components/SimulatorTimeline';
 import AdminHeader from './AdminHeader';
 import AdminIndexRedirect from './AdminIndexRedirect';
 import { AnalyticsProvider } from './context/AnalyticsContext';
+import { SupportProvider } from './context/SupportContext';
 import { usePrintMode } from './context/usePrintMode';
 import { STORAGE } from './data/constants';
 import { sectionFromPath } from './nav';
@@ -15,6 +16,7 @@ import ClassesPage from './pages/ClassesPage';
 import SimulatorsPage from './pages/SimulatorsPage';
 import RoomsPage from './pages/RoomsPage';
 import GuestsPage from './pages/GuestsPage';
+import MessagesPage from './pages/MessagesPage';
 
 const RING = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78003F]/40';
 
@@ -54,6 +56,16 @@ class PageErrorBoundary extends React.Component {
       </div>
     );
   }
+}
+
+// Data the whole admin area shares: the analytics for the pages, and the support chat threads
+// for the "Messages" pill and page (one realtime channel for both).
+function ShellProviders({ children }) {
+  return (
+    <AnalyticsProvider>
+      <SupportProvider>{children}</SupportProvider>
+    </AnalyticsProvider>
+  );
 }
 
 /**
@@ -100,7 +112,7 @@ export default function AdminShell() {
   };
 
   return (
-    <AnalyticsProvider>
+    <ShellProviders>
       <div className="sf-admin min-h-screen bg-gradient-to-b from-[#FFFFFF] via-[#DCDCDC]/20 to-[#FFFFFF] text-[#414141] font-sans">
         <a
           href="#sf-main"
@@ -120,6 +132,7 @@ export default function AdminShell() {
                 <Route path="simulators" element={<SimulatorsPage />} />
                 <Route path="rooms" element={<RoomsPage />} />
                 <Route path="guests" element={<GuestsPage />} />
+                <Route path="messages" element={<MessagesPage />} />
                 <Route path="calendar" element={null} />
                 <Route path="*" element={<Navigate to="/admin/overview" replace />} />
               </Routes>
@@ -140,6 +153,6 @@ export default function AdminShell() {
           </div>
         )}
       </div>
-    </AnalyticsProvider>
+    </ShellProviders>
   );
 }
