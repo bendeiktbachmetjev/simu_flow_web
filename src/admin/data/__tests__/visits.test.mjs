@@ -153,12 +153,12 @@ test('computeBaseline: median of normally closed rows, fallback below the sample
   );
 });
 
-test('cleanSimSessions: same rules, no user merge, overlap is cut at the next start', () => {
+test('cleanSimSessions: same rules; people overlapping on one simulator are one device session', () => {
   const ref = makeRef();
   const now = utcMs('2026-06-16T09:00:00Z');
   const rows = [
     simSession('sim-2', 's1', '2026-06-15 10:00', '2026-06-15 10:20', 'a'),
-    // overlaps the next session on the same simulator → cut at 10:40
+    // two people work on the same simulator at once → one device session 10:30–11:10
     simSession('sim-2', 's2', '2026-06-15 10:30', '2026-06-15 11:00', 'b'),
     simSession('sim-2', 's1', '2026-06-15 10:40', '2026-06-15 11:10', 'c'),
     // closed by the 20:00 job → typical length
@@ -180,14 +180,76 @@ test('cleanSimSessions: same rules, no user merge, overlap is cut at the next st
   });
   const byId = Object.fromEntries(sessions.map((s) => [s.id, s]));
 
-  assert.deepEqual(Object.keys(byId).sort(), ['a', 'b', 'c', 'd', 'e', 'h']);
-  assert.equal(byId.a.durationMin, 20);
-  assert.equal(byId.b.durationMin, 10, 'cut where the next session starts');
-  assert.equal(byId.c.durationMin, 30);
+  assert.deepEqual(Object.keys(byId).sort(), ['a', 'b', 'd', 'e', 'h']);
+  assert.deepEqual([byId.a.durationMin, byId.a.people], [20, 1]);
+  assert.deepEqual([byId.b.durationMin, byId.b.people], [40, 2], 'first start to last end, counted once');
+  assert.deepEqual(byId.b.segments, [{ date: '2026-06-15', startMin: 630, endMin: 670 }]);
   assert.deepEqual([byId.d.durationMin, byId.d.imputed], [20, true]);
   assert.deepEqual([byId.e.durationMin, byId.e.imputed, byId.e.open], [20, true, false], 'open for a day = forgotten');
   assert.deepEqual([byId.h.durationMin, byId.h.open], [25, true]);
   assert.deepEqual([byId.a.simNumber, byId.a.simulatorId, byId.a.role, byId.a.dayKey], ['2', 'sim-2', 'student', '2026-06-15']);
   assert.deepEqual(byId.a.segments, [{ date: '2026-06-15', startMin: 600, endMin: 620 }]);
-  assert.deepEqual(stats, { raw: 8, invalid: 0, outOfScope: 1, short: 1, cut: 1, imputed: 2, capped: 0, open: 1 });
+  assert.deepEqual(stats, { raw: 8, invalid: 0, outOfScope: 1, short: 1, merged: 1, imputed: 2, capped: 0, open: 1 });
+});
+
+test('cleanSimSessions: a group on one simulator keeps its whole time, whoever ends first', () => {
+  const ref = makeRef();
+  const options = { nowMs: utcMs('2026-06-16T09:00:00Z'), simulatorById: ref.simulatorById, medianMin: 20 };
+
+  // A teacher starts three students together; they are ended one by one.
+  const together = cleanSimSessions(
+    [
+      simSession('sim-2', 's1', '2026-06-15 10:00', '2026-06-15 10:50', 'a'),
+      simSession('sim-2', 's2', '2026-06-15 10:00', '2026-06-15 11:00', 'b'),
+      simSession('sim-2', 's3', '2026-06-15 10:00', '2026-06-15 10:40', 'c'),
+    ],
+    options
+  );
+  assert.deepEqual(
+    together.sessions.map((s) => [s.durationMin, s.people, s.segments]),
+    [[60, 3, [{ date: '2026-06-15', startMin: 600, endMin: 660 }]]]
+  );
+  assert.equal(together.stats.merged, 2);
+
+  // Somebody joins late and leaves early: the simulator was still in use until 11:00.
+  const lateJoiner = cleanSimSessions(
+    [
+      simSession('sim-2', 's1', '2026-06-15 10:00', '2026-06-15 11:00', 'a'),
+      simSession('sim-2', 's2', '2026-06-15 10:30', '2026-06-15 10:35', 'b'),
+    ],
+    options
+  );
+  assert.deepEqual(lateJoiner.sessions.map((s) => [s.id, s.durationMin, s.people]), [['a', 60, 2]]);
+
+  // One person after another, the second starting the second the first ends: two sessions.
+  const inTurn = cleanSimSessions(
+    [
+      simSession('sim-2', 's1', '2026-06-15 10:00', '2026-06-15 10:20', 'a'),
+      simSession('sim-2', 's2', '2026-06-15 10:20', '2026-06-15 10:45', 'b'),
+    ],
+    options
+  );
+  assert.deepEqual(inTurn.sessions.map((s) => [s.id, s.durationMin, s.people]), [['a', 20, 1], ['b', 25, 1]]);
+  assert.equal(inTurn.stats.merged, 0);
+
+  // A group member who is still on it keeps the device session open.
+  const stillRunning = cleanSimSessions(
+    [
+      simSession('sim-2', 's1', '2026-06-16 11:00', '2026-06-16 11:30', 'a'),
+      simSession('sim-2', 's2', '2026-06-16 11:00', null, 'b'),
+    ],
+    options
+  );
+  assert.deepEqual(stillRunning.sessions.map((s) => [s.durationMin, s.open, s.people]), [[60, true, 2]]);
+
+  // The same simulator on another day, or another simulator at the same time, never merges.
+  const apart = cleanSimSessions(
+    [
+      simSession('sim-2', 's1', '2026-06-15 10:00', '2026-06-15 10:30', 'a'),
+      simSession('sim-3', 's2', '2026-06-15 10:00', '2026-06-15 10:30', 'b'),
+      simSession('sim-2', 's2', '2026-06-14 10:00', '2026-06-14 10:30', 'c'),
+    ],
+    options
+  );
+  assert.equal(apart.sessions.length, 3);
 });
